@@ -66,16 +66,20 @@ AVAILABLE_TABLES = [
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 API_KEY_NAME = "X-API-Key"
-api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=True)
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 
-def verify_api_key(key: str = Security(api_key_header)):
+def verify_api_key(
+    header_key: Optional[str] = Security(api_key_header),
+    api_key: Optional[str] = Query(default=None, include_in_schema=False),
+):
     expected = os.environ.get("API_REST_KEY", "")
     if not expected:
         raise HTTPException(status_code=500, detail="API_REST_KEY no configurada en el servidor.")
-    if key != expected:
+    token = header_key or api_key
+    if not token or token != expected:
         raise HTTPException(status_code=403, detail="API Key inválida.")
-    return key
+    return token
 
 
 # ── DB helper ─────────────────────────────────────────────────────────────────
