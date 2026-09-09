@@ -23,6 +23,8 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.server.auth.providers.github import GitHubProvider
+from starlette.routing import Mount
+from api import api as rest_api
 
 load_dotenv()
 
@@ -210,35 +212,64 @@ def run_custom_query(sql: str) -> str:
     return json.dumps(rows, default=serialize, ensure_ascii=False)
 
 
-if __name__ == "__main__":
-    # ── Cron interno: corre replicate.py todos los días a las 2 AM UTC ───────
-    def replication_loop():
-        log = logging.getLogger("replicator")
-        logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-        log.info("Scheduler de replicación iniciado. Corre a las 02:00 UTC diario.")
-        while True:
-            now = datetime.now(timezone.utc)
-            # Calcular segundos hasta las 02:00 UTC del próximo día
-            next_run = now.replace(hour=7, minute=0, second=0, microsecond=0)
-            if now >= next_run:
-                next_run = next_run.replace(day=next_run.day + 1)
-            wait_seconds = (next_run - now).total_seconds()
-            log.info(f"Próxima replicación en {wait_seconds/3600:.1f}h ({next_run.strftime('%Y-%m-%d %H:%M')} UTC)")
-            time.sleep(wait_seconds)
-            try:
-                from replicate import main as run_replication
-                log.info("Iniciando replicación OFIMA → PostgreSQL ...")
-                run_replication()
-            except Exception as e:
-                log.error(f"Error en replicación: {e}")
+def start_replication_scheduler():
+    """Hilo daemon que ejecuta la replicación OFIMA → PostgreSQL diariamente a las 07:00 UTC."""
+    log = logging.getLogger("replicator")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    log.info("Scheduler de replicación iniciado. Corre a las 07:00 UTC diario.")
+    while True:
+        now = datetime.now(timezone.utc)
+        next_run = now.replace(hour=7, minute=0, second=0, microsecond=0)
+        if now >= next_run:
+            # Avanzar al día siguiente sin manipular .day directamente (evita error fin de mes)
+            from datetime import timedelta
+            next_run = next_run + timedelta(days=1)
+        wait_seconds = (next_run - now).total_seconds()
+        log.info(f"Próxima replicación en {wait_seconds/3600:.1f}h ({next_run.strftime('%Y-%m-%d %H:%M')} UTC)")
+        time.sleep(wait_seconds)
+        try:
+            from replicate import main as run_replication
+            log.info("Iniciando replicación OFIMA → PostgreSQL ...")
+            run_replication()
+        except Exception as e:
+            log.error(f"Error en replicación: {e}")
 
-    t = threading.Thread(target=replication_loop, daemon=True)
+
+def build_app():
+    """
+    Construye la app ASGI combinada:
+      /mcp  → servidor MCP (FastMCP con GitHub OAuth)
+      /api  → API REST (FastAPI)
+    Ambas corren en el mismo proceso y puerto.
+    """
+    mcp_asgi = mcp.http_app(path="/mcp")
+
+    # Montamos la REST API bajo /api y el MCP bajo /mcp
+    from starlette.applications import Starlette
+    from starlette.routing import Mount
+
+    app = Starlette(
+        routes=[
+            Mount("/api", app=rest_api),
+            Mount("/", app=mcp_asgi),
+        ]
+    )
+    return app
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    # Arrancar scheduler de replicación en background
+    t = threading.Thread(target=start_replication_scheduler, daemon=True)
     t.start()
 
-    # ── MCP server ─────────────────────────────────────────────────────────────
     port = int(os.environ.get("PORT", 8000))
-    mcp.run(
-        transport="http",
-        host="0.0.0.0",
-        port=port,
+    app = build_app()
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    logging.getLogger("uvicorn").info(
+        f"Servidor iniciado → MCP: http://0.0.0.0:{port}/mcp | REST API: http://0.0.0.0:{port}/api/docs"
     )
+
+    uvicorn.run(app, host="0.0.0.0", port=port)
