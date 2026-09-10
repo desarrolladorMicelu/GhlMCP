@@ -500,7 +500,23 @@ def get_stock(
     q: str = Query(..., min_length=2, description="Nombre o parte del nombre, ej: iphone 15"),
     key: str = Security(verify_api_key),
 ):
-    return _run_stock_query(q, solo_con_precio=False)
+    rows = _run_stock_query(q, solo_con_precio=False)
+    if not rows:
+        return {"disponible": False, "mensaje": f"No hay stock disponible para '{q}'", "productos": ""}
+
+    lineas = []
+    for r in rows:
+        precio = f"${r['precio']:,.0f}" if r['precio'] else "Sin precio"
+        bodegas = ", ".join(r['bodegas']) if r['bodegas'] else "N/A"
+        lineas.append(
+            f"{r['descripcion']} | {r['estado_nombre']} | Color: {r['color_nombre']} | "
+            f"Stock: {r['stock']} unidades | Bodegas: {bodegas} | Precio: {precio}"
+        )
+
+    return {
+        "disponible": True,
+        "productos": "\n".join(lineas)
+    }
 
 
 @api.get(
@@ -512,7 +528,23 @@ def get_stock_con_precio(
     q: str = Query(..., min_length=2, description="Nombre o parte del nombre, ej: iphone 15"),
     key: str = Security(verify_api_key),
 ):
-    return _run_stock_query(q, solo_con_precio=True)
+    rows = _run_stock_query(q, solo_con_precio=True)
+    if not rows:
+        return {"disponible": False, "mensaje": f"No hay stock con precio para '{q}'", "productos": ""}
+
+    lineas = []
+    for r in rows:
+        precio = f"${r['precio']:,.0f}" if r['precio'] else "Sin precio"
+        bodegas = ", ".join(r['bodegas']) if r['bodegas'] else "N/A"
+        lineas.append(
+            f"{r['descripcion']} | {r['estado_nombre']} | Color: {r['color_nombre']} | "
+            f"Stock: {r['stock']} unidades | Bodegas: {bodegas} | Precio: {precio}"
+        )
+
+    return {
+        "disponible": True,
+        "productos": "\n".join(lineas)
+    }
 
 
 
