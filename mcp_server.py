@@ -232,6 +232,7 @@ def build_app():
     mcp_asgi = mcp.http_app(path="/")
 
     app = Starlette(
+        lifespan=mcp_asgi.lifespan,
         routes=[
             Mount("/api", app=rest_api),
             Mount("/mcp", app=mcp_asgi),
