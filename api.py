@@ -494,67 +494,25 @@ def _group_by_product(rows: list[dict]) -> list[dict]:
     "/stock",
     tags=["Stock"],
     summary="Busca productos por nombre y devuelve stock disponible",
-    description=(
-        "Busca en el catálogo de productos por nombre (case-insensitive). "
-        "Retorna todas las variantes disponibles (estado + color) con stock, bodegas y precio. "
-        "Ejemplo: `q=iphone 15` devuelve iPhone 15, 15 Plus, 15 Pro — pero NO el 14 ni el 16."
-    ),
+    description="Busca por nombre (case-insensitive). Ejemplo: q=iphone 15",
 )
 def get_stock(
-    q: str = Query(..., min_length=2, description="Nombre o parte del nombre del producto, ej: iphone 15"),
-    solo_con_precio: bool = Query(False, description="Si es true, excluye productos sin precio configurado"),
-    agrupar: bool = Query(True, description="Si es true, agrupa variantes bajo cada producto"),
+    q: str = Query(..., min_length=2, description="Nombre o parte del nombre, ej: iphone 15"),
     key: str = Security(verify_api_key),
 ):
-    rows = _run_stock_query(q, solo_con_precio)
-
-    if not rows:
-        return {"query": q, "total_productos": 0, "total_unidades": 0, "productos": []}
-
-    if agrupar:
-        productos = _group_by_product(rows)
-    else:
-        productos = rows
-
-    total_unidades = sum(r["stock"] for r in rows)
-
-    return {
-        "query":           q,
-        "total_productos": len(productos) if agrupar else len(set(r["codigo"] for r in rows)),
-        "total_unidades":  total_unidades,
-        "productos":       productos,
-    }
+    return _run_stock_query(q, solo_con_precio=False)
 
 
 @api.get(
     "/stock/con-precio",
     tags=["Stock"],
     summary="Igual que /stock pero solo productos con precio configurado",
-    description="Shortcut de /stock?solo_con_precio=true. Excluye variantes sin precio.",
 )
 def get_stock_con_precio(
-    q: str = Query(..., min_length=2, description="Nombre o parte del nombre del producto"),
-    agrupar: bool = Query(True, description="Si es true, agrupa variantes bajo cada producto"),
+    q: str = Query(..., min_length=2, description="Nombre o parte del nombre, ej: iphone 15"),
     key: str = Security(verify_api_key),
 ):
-    rows = _run_stock_query(q, solo_con_precio=True)
-
-    if not rows:
-        return {"query": q, "total_productos": 0, "total_unidades": 0, "productos": []}
-
-    if agrupar:
-        productos = _group_by_product(rows)
-    else:
-        productos = rows
-
-    total_unidades = sum(r["stock"] for r in rows)
-
-    return {
-        "query":           q,
-        "total_productos": len(productos) if agrupar else len(set(r["codigo"] for r in rows)),
-        "total_unidades":  total_unidades,
-        "productos":       productos,
-    }
+    return _run_stock_query(q, solo_con_precio=True)
 
 
 
