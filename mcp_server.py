@@ -222,20 +222,19 @@ def start_replication_scheduler():
 def build_app():
     """
     Construye la app ASGI combinada:
-      /mcp  → servidor MCP (FastMCP con GitHub OAuth)
+      /mcp  → servidor MCP (FastMCP)
       /api  → API REST (FastAPI)
     Ambas corren en el mismo proceso y puerto.
     """
-    mcp_asgi = mcp.http_app(path="/mcp")
-
-    # Montamos la REST API bajo /api y el MCP bajo /mcp
     from starlette.applications import Starlette
     from starlette.routing import Mount
+
+    mcp_asgi = mcp.http_app(path="/")
 
     app = Starlette(
         routes=[
             Mount("/api", app=rest_api),
-            Mount("/", app=mcp_asgi),
+            Mount("/mcp", app=mcp_asgi),
         ]
     )
     return app
