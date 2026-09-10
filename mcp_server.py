@@ -2,14 +2,8 @@
 MCP Server HTTP — consulta las tablas OFIMA replicadas en PostgreSQL (esquema: backups).
 Desplegable en Railway como servicio web.
 
-Claude web: pega la URL de Railway en "Agregar conector personalizado"
-Ejemplo: https://tu-app.up.railway.app/mcp
-
-Auth: GitHub OAuth (GitHubProvider de FastMCP)
-Requiere variables de entorno:
-  GITHUB_CLIENT_ID     — Client ID de tu GitHub OAuth App
-  GITHUB_CLIENT_SECRET — Client Secret de tu GitHub OAuth App
-  BASE_URL             — URL pública del servidor, ej: https://tu-app.up.railway.app
+MCP URL: https://tu-app.up.railway.app/mcp
+REST API: https://tu-app.up.railway.app/api/docs
 """
 
 import os
@@ -22,22 +16,12 @@ import psycopg2.extras
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from fastmcp import FastMCP
-from fastmcp.server.auth.providers.github import GitHubProvider
 from starlette.routing import Mount
 from api import api as rest_api
 
 load_dotenv()
 
-# ── GitHub OAuth ──────────────────────────────────────────────────────────────
-_base_url = os.environ.get("BASE_URL", "http://localhost:8000").rstrip("/")
-
-auth_provider = GitHubProvider(
-    client_id=os.environ["GITHUB_CLIENT_ID"],
-    client_secret=os.environ["GITHUB_CLIENT_SECRET"],
-    base_url=_base_url,
-)
-
-mcp = FastMCP("OFIMA Data", auth=auth_provider)
+mcp = FastMCP("OFIMA Data")
 
 PG_SCHEMA = "backups"
 
