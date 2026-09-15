@@ -169,16 +169,18 @@ def get_stock(key: str = Security(verify_api_key)):
     for row in raw:
         bodegas_raw   = row.get("bodegas") or ""
         bodegas_unicas = sorted(set(b.strip() for b in bodegas_raw.split(",") if b.strip()))
+        estado = (row["estado"] or "").strip() or "0"
+        color  = (row["color"]  or "").strip() or "0"
         result.append({
-            "codigo":        row["codigo"],
-            "descripcion":   row["descripcion"] or row["codigo"],
-            "estado":        row["estado"],
-            "estado_nombre": ESTADOS.get(row["estado"], row["estado"]),
-            "color":         row["color"],
-            "color_nombre":  COLORES.get(row["color"], row["color"]),
-            "stock":         row["stock"],
+            "codigo":        (row["codigo"]      or "").strip() or "0",
+            "descripcion":   (row["descripcion"] or row["codigo"] or "").strip() or "0",
+            "estado":        estado,
+            "estado_nombre": ESTADOS.get(estado, estado),
+            "color":         color,
+            "color_nombre":  COLORES.get(color, color),
+            "stock":         row["stock"] if row["stock"] is not None else 0,
             "bodegas":       bodegas_unicas,
-            "precio":        float(row["precio"]) if row["precio"] is not None else None,
+            "precio":        float(row["precio"]) if row["precio"] is not None else 0,
         })
 
     return {
