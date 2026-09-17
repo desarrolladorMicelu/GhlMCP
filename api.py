@@ -103,27 +103,45 @@ CLASIFICACION_NOMBRES = {
 
 STOCK_SQL = """
     SELECT
-        RTRIM(s.CODIGO)                                     AS codigo,
-        RTRIM(m.DESCRIPCIO)                                 AS descripcion,
-        RTRIM(ts.XESTADO)                                   AS estado,
-        RTRIM(ts.XCOLOR)                                    AS color,
-        COUNT(s.SERIE)                                      AS stock,
-        STRING_AGG(RTRIM(s.BODEGA), ', ')                   AS bodegas,
-        (
-            SELECT TOP 1 p.PRECIO
-            FROM MvPrecio p WITH (NOLOCK)
-            WHERE RTRIM(p.CODPRODUC) = RTRIM(s.CODIGO)
-              AND RTRIM(p.CODPRECIO) = RTRIM(ts.XESTADO)
-        )                                                   AS precio
-    FROM MTSERIES s WITH (NOLOCK)
-    INNER JOIN XMYCT_TECNICO_SERIES ts WITH (NOLOCK)
-           ON s.SERIE = ts.XSERIE
-    LEFT JOIN MtMercia m WITH (NOLOCK)
-           ON RTRIM(m.CODIGO) = RTRIM(s.CODIGO)
-    WHERE s.EXISTE = 1
-      AND s.BODEGA IN ({bodegas_ph})
-    GROUP BY RTRIM(s.CODIGO), RTRIM(m.DESCRIPCIO), RTRIM(ts.XESTADO), RTRIM(ts.XCOLOR)
-    ORDER BY RTRIM(m.DESCRIPCIO), RTRIM(ts.XESTADO), RTRIM(ts.XCOLOR)
+        RTRIM(MvPrecio.[CODPRODUC])         AS codigo,
+        RTRIM(MvPrecio.[CODPRECIO])         AS clasificacion,
+        MvPrecio.[PRECIO]                   AS precio,
+        RTRIM(MtMercia.[DESCRIPCIO])        AS descripcion,
+        RTRIM(MtMercia.[CLASIFICA2])        AS marca,
+        RTRIM(MtMercia.[CODLINEA])          AS categoria_general,
+        RTRIM(MtMercia.[CODSBLIN])          AS categoria_especifica,
+        MtMercia.[HABILITADO]               AS habilitado,
+        RTRIM(MtMercia.[UBICACION])         AS ano_salida,
+        RTRIM(ts.[XCOLOR])                  AS color,
+        COUNT(s.[SERIE])                    AS stock,
+        STRING_AGG(RTRIM(s.[BODEGA]), ', ') AS bodegas
+    FROM
+        MvPrecio
+    INNER JOIN
+        MtMercia ON RTRIM(MvPrecio.[CODPRODUC]) = RTRIM(MtMercia.[CODIGO])
+    LEFT JOIN
+        MTSERIES s WITH (NOLOCK) ON RTRIM(s.[CODIGO]) = RTRIM(MvPrecio.[CODPRODUC])
+                                  AND s.[EXISTE] = 1
+                                  AND s.[BODEGA] IN ('BM','TM','TB','BB','BCAL','BNQS')
+    LEFT JOIN
+        XMYCT_TECNICO_SERIES ts WITH (NOLOCK) ON s.[SERIE] = ts.[XSERIE]
+                                              AND RTRIM(ts.[XESTADO]) = RTRIM(MvPrecio.[CODPRECIO])
+    WHERE
+        RTRIM(MtMercia.[CODSBLIN]) = 'SMPH'
+        AND MvPrecio.[PRECIO] > 0
+    GROUP BY
+        RTRIM(MvPrecio.[CODPRODUC]),
+        RTRIM(MvPrecio.[CODPRECIO]),
+        MvPrecio.[PRECIO],
+        RTRIM(MtMercia.[DESCRIPCIO]),
+        RTRIM(MtMercia.[CLASIFICA2]),
+        RTRIM(MtMercia.[CODLINEA]),
+        RTRIM(MtMercia.[CODSBLIN]),
+        MtMercia.[HABILITADO],
+        RTRIM(MtMercia.[UBICACION]),
+        RTRIM(ts.[XCOLOR])
+    ORDER BY
+        RTRIM(MtMercia.[DESCRIPCIO]), RTRIM(MvPrecio.[CODPRECIO])
 """
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -150,13 +168,10 @@ app = FastAPI(
     ),
 )
 def get_stock(key: str = Security(verify_api_key)):
-    bodegas_ph = ", ".join(["?"] * len(BODEGAS_STOCK))
-    sql = STOCK_SQL.format(bodegas_ph=bodegas_ph)
-
     conn = get_sqlserver_conn()
     cur  = conn.cursor()
     try:
-        cur.execute(sql, list(BODEGAS_STOCK))
+        cur.execute(STOCK_SQL)
         raw = rows_to_dicts(cur)
     except Exception as e:
         logging.error(f"[/stock] {e}")
@@ -167,15 +182,15 @@ def get_stock(key: str = Security(verify_api_key)):
 
     result = []
     for row in raw:
-        bodegas_raw   = row.get("bodegas") or ""
+        bodegas_raw    = row.get("bodegas") or ""
         bodegas_unicas = sorted(set(b.strip() for b in bodegas_raw.split(",") if b.strip()))
-        estado = (row["estado"] or "").strip() or "0"
-        color  = (row["color"]  or "").strip() or "0"
+        clasificacion  = (row["clasificacion"] or "").strip() or "0"
+        color          = (row["color"]         or "").strip() or "0"
         result.append({
             "codigo":        (row["codigo"]      or "").strip() or "0",
-            "descripcion":   (row["descripcion"] or row["codigo"] or "").strip() or "0",
-            "estado":        estado,
-            "estado_nombre": ESTADOS.get(estado, estado),
+            "descripcion":   (row["descripcion"] or "").strip() or "0",
+            "estado":        clasificacion,
+            "estado_nombre": CLASIFICACION_NOMBRES.get(clasificacion, clasificacion),
             "color":         color,
             "color_nombre":  COLORES.get(color, color),
             "stock":         row["stock"] if row["stock"] is not None else 0,
