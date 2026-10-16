@@ -22,6 +22,7 @@ from fastapi.security.api_key import APIKeyHeader
 from dotenv import load_dotenv
 
 from db_sqlserver import get_sqlserver_conn, rows_to_dicts
+import busqueda
 
 load_dotenv()
 
@@ -160,14 +161,26 @@ app = FastAPI(
 @app.get(
     "/stock",
     tags=["Stock"],
-    summary="Todo el stock disponible en bodegas",
+    summary="Stock disponible en bodegas (con búsqueda)",
     description=(
-        "Devuelve todos los equipos con stock en las bodegas de OFIMA, "
-        "agrupados por código + estado + color. Incluye precio de venta, "
-        "cantidad de unidades y bodegas donde se encuentra cada variante."
+        "Devuelve los equipos con stock en las bodegas de OFIMA, agrupados por "
+        "código + estado + color, con precio de venta, unidades y bodegas.\n\n"
+        "Búsqueda con el parámetro `q` (opcional): todos los términos deben aparecer "
+        "como palabras completas e insensible a mayúsculas/acentos.\n"
+        "- `q=iphone 15` -> iPhone 15, 15 Plus, 15 Pro y 15 Pro Max (no el 14 ni el 16)\n"
+        "- `q=iphone 16` -> solo la familia 16\n"
+        "- `q=iphone pro max` -> solo los Pro Max\n"
+        "- `q=iphone` -> toda la familia iPhone\n"
+        "Sin `q` devuelve todo el stock."
     ),
 )
-def get_stock(key: str = Security(verify_api_key)):
+def get_stock(
+    q: Optional[str] = Query(
+        default=None,
+        description="Nombre o parte del nombre del equipo. Ej: 'iphone 15', 'iphone pro max'.",
+    ),
+    key: str = Security(verify_api_key),
+):
     conn = get_sqlserver_conn()
     cur  = conn.cursor()
     try:
@@ -198,9 +211,12 @@ def get_stock(key: str = Security(verify_api_key)):
             "precio":        float(row["precio"]) if row["precio"] is not None else 0,
         })
 
+    result = busqueda.filtrar(result, q, lambda r: r["descripcion"])
+
     return {
+        "query":           q or None,
         "total_variantes": len(result),
-        "data": result,
+        "data":            result,
     }
 
 
@@ -209,14 +225,27 @@ def get_stock(key: str = Security(verify_api_key)):
 @app.get(
     "/retoma",
     tags=["Retoma"],
-    summary="Todos los precios de recepción del plan retoma",
+    summary="Precios de recepción del plan retoma (con búsqueda)",
     description=(
-        "Devuelve todos los equipos habilitados con precio de recepción configurado "
-        "(plan retoma). Incluye nombre, marca, categoría, año de salida, condición "
-        "y cuánto recibe el cliente al entregar el equipo como parte de pago."
+        "Devuelve los equipos habilitados con precio de recepción configurado "
+        "(plan retoma), con nombre, marca, categoría, año de salida, condición y "
+        "cuánto recibe el cliente al entregar el equipo como parte de pago.\n\n"
+        "Búsqueda con el parámetro `q` (opcional): todos los términos deben aparecer "
+        "como palabras completas e insensible a mayúsculas/acentos (busca en nombre "
+        "y marca).\n"
+        "- `q=iphone 15` -> iPhone 15, 15 Plus, 15 Pro y 15 Pro Max (no el 14 ni el 16)\n"
+        "- `q=iphone pro max` -> solo los Pro Max\n"
+        "- `q=iphone` -> toda la familia iPhone\n"
+        "Sin `q` devuelve todos los precios de retoma."
     ),
 )
-def get_retoma(key: str = Security(verify_api_key)):
+def get_retoma(
+    q: Optional[str] = Query(
+        default=None,
+        description="Nombre o parte del nombre del equipo. Ej: 'iphone 15', 'iphone pro max'.",
+    ),
+    key: str = Security(verify_api_key),
+):
     conn = get_precios_conn()
     cur  = conn.cursor()
     try:
@@ -257,7 +286,10 @@ def get_retoma(key: str = Security(verify_api_key)):
             "precio_recibe":          row["precio_recibe"],
         })
 
+    result = busqueda.filtrar(result, q, lambda r: f'{r["nombre"]} {r["marca"] or ""}')
+
     return {
+        "query": q or None,
         "total": len(result),
         "data":  result,
     }
