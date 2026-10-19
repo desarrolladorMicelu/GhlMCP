@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Promociones</title>
 <style>
+  * { box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif; margin: 0; background: #f5f5f5; color: #222; }
   .wrap { max-width: 960px; margin: 32px auto; padding: 0 16px; }
   h1 { font-size: 22px; margin: 0 0 16px; }
@@ -13,21 +14,43 @@
     background: #222; color: #fff; border: 1px solid #222;
     padding: 9px 14px; border-radius: 6px; cursor: pointer;
     font-size: 14px; line-height: 18px; text-decoration: none;
-    display: inline-block; box-sizing: border-box;
+    display: inline-block;
   }
   .btn.light { background: #fff; color: #222; border-color: #ccc; }
   .btn:hover { opacity: .88; }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
-  #file { display: none; }
-  .file-name { font-size: 13px; color: #555; }
   #status { font-size: 13px; color: #555; }
   #status.error { color: #b00020; }
   #status.ok { color: #0a7a2f; }
+
   table { width: 100%; border-collapse: collapse; background: #fff; font-size: 14px; }
   th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid #e5e5e5; }
   th { background: #fafafa; font-weight: 600; }
   td.num, th.num { text-align: right; white-space: nowrap; }
   .muted { color: #777; }
+
+  #file { display: none; }
+  .overlay {
+    display: none; position: fixed; inset: 0; z-index: 10;
+    background: rgba(0, 0, 0, .45); align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .overlay.open { display: flex; }
+  .modal { background: #fff; width: 100%; max-width: 460px; border-radius: 10px; padding: 20px; }
+  .modal h2 { font-size: 18px; margin: 0 0 6px; }
+  .modal p { font-size: 13px; color: #666; margin: 0 0 16px; }
+  .drop {
+    display: block; border: 1px dashed #bbb; border-radius: 8px;
+    padding: 26px 16px; text-align: center; cursor: pointer;
+    color: #555; font-size: 14px; transition: background .15s, border-color .15s;
+  }
+  .drop:hover, .drop.over { border-color: #222; background: #fafafa; }
+  .drop strong { display: block; color: #222; font-size: 15px; margin-bottom: 4px; }
+  .drop span { font-size: 12px; }
+  .archivo { margin-top: 12px; font-size: 13px; color: #333; word-break: break-all; }
+  .modal-acciones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  .modal-estado { margin-top: 12px; font-size: 13px; color: #555; min-height: 18px; }
+  .modal-estado.error { color: #b00020; }
 </style>
 </head>
 <body>
@@ -36,10 +59,7 @@
 
   <div class="bar">
     <a class="btn light" href="/promociones/plantilla" download>Exportar plantilla</a>
-    <label class="btn light" for="file">Seleccionar archivo</label>
-    <input type="file" id="file" accept=".csv,.xlsx,.xlsm">
-    <button class="btn" id="importar">Importar</button>
-    <span class="file-name" id="file-name"></span>
+    <button class="btn" id="abrir">Importar promociones</button>
     <span id="status"></span>
   </div>
 
@@ -58,12 +78,40 @@
   </table>
 </div>
 
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+    <h2 id="modal-titulo">Importar promociones</h2>
+    <p>Selecciona o arrastra el archivo CSV o XLSX. Al importar se reemplazan todas las promociones actuales.</p>
+
+    <input type="file" id="file" accept=".csv,.xlsx,.xlsm">
+    <label class="drop" id="drop" for="file">
+      <strong>Seleccionar archivo</strong>
+      <span>CSV o XLSX · también puedes arrastrarlo aquí</span>
+    </label>
+    <div class="archivo" id="archivo"></div>
+
+    <div class="modal-estado" id="modal-estado"></div>
+
+    <div class="modal-acciones">
+      <button class="btn light" id="cancelar">Cancelar</button>
+      <button class="btn" id="confirmar" disabled>Importar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const tbody = document.getElementById('tbody');
 const statusEl = document.getElementById('status');
+const overlay = document.getElementById('overlay');
 const fileEl = document.getElementById('file');
-const fileNameEl = document.getElementById('file-name');
-const boton = document.getElementById('importar');
+const dropEl = document.getElementById('drop');
+const archivoEl = document.getElementById('archivo');
+const modalEstado = document.getElementById('modal-estado');
+const abrirBtn = document.getElementById('abrir');
+const cancelarBtn = document.getElementById('cancelar');
+const confirmarBtn = document.getElementById('confirmar');
+
+let archivoSeleccionado = null;
 
 function formatear(numero) {
   return new Intl.NumberFormat('es-CO', {
@@ -110,33 +158,92 @@ async function cargar() {
   }
 }
 
-fileEl.addEventListener('change', function () {
-  fileNameEl.textContent = fileEl.files[0] ? fileEl.files[0].name : '';
-  estado('');
+function abrirModal() {
+  archivoSeleccionado = null;
+  fileEl.value = '';
+  archivoEl.textContent = '';
+  modalEstado.textContent = '';
+  modalEstado.className = 'modal-estado';
+  confirmarBtn.disabled = true;
+  confirmarBtn.textContent = 'Importar';
+  cancelarBtn.disabled = false;
+  overlay.classList.add('open');
+}
+
+function cerrarModal() {
+  overlay.classList.remove('open');
+}
+
+function usarArchivo(archivo) {
+  if (!archivo) return;
+  archivoSeleccionado = archivo;
+  archivoEl.textContent = archivo.name;
+  modalEstado.textContent = '';
+  modalEstado.className = 'modal-estado';
+  confirmarBtn.disabled = false;
+}
+
+abrirBtn.addEventListener('click', abrirModal);
+cancelarBtn.addEventListener('click', cerrarModal);
+overlay.addEventListener('click', function (evento) {
+  if (evento.target === overlay) cerrarModal();
+});
+document.addEventListener('keydown', function (evento) {
+  if (evento.key === 'Escape' && overlay.classList.contains('open')) cerrarModal();
 });
 
-boton.addEventListener('click', async function () {
-  const archivo = fileEl.files[0];
-  if (!archivo) { estado('Selecciona un archivo.', 'error'); return; }
-  if (!confirm('Esto reemplaza todas las promociones actuales. ¿Continuar?')) return;
+fileEl.addEventListener('change', function () {
+  usarArchivo(fileEl.files[0]);
+});
+
+['dragenter', 'dragover'].forEach(function (evento) {
+  dropEl.addEventListener(evento, function (e) {
+    e.preventDefault();
+    dropEl.classList.add('over');
+  });
+});
+['dragleave', 'drop'].forEach(function (evento) {
+  dropEl.addEventListener(evento, function (e) {
+    e.preventDefault();
+    dropEl.classList.remove('over');
+  });
+});
+dropEl.addEventListener('drop', function (e) {
+  usarArchivo(e.dataTransfer.files[0]);
+});
+
+confirmarBtn.addEventListener('click', async function () {
+  if (!archivoSeleccionado) {
+    modalEstado.textContent = 'Selecciona un archivo.';
+    modalEstado.className = 'modal-estado error';
+    return;
+  }
+
+  confirmarBtn.disabled = true;
+  cancelarBtn.disabled = true;
+  confirmarBtn.textContent = 'Importando...';
+  modalEstado.textContent = '';
+  modalEstado.className = 'modal-estado';
 
   const cuerpo = new FormData();
-  cuerpo.append('file', archivo);
+  cuerpo.append('file', archivoSeleccionado);
 
-  boton.disabled = true;
-  estado('Importando...');
   try {
     const respuesta = await fetch('/promociones/ui/importar', { method: 'POST', body: cuerpo });
     const datos = await respuesta.json().catch(function () { return {}; });
     if (!respuesta.ok) throw new Error(datos.detail || 'Error al importar el archivo.');
+
+    cerrarModal();
     estado('Importados ' + datos.total + ' productos.', 'ok');
-    fileEl.value = '';
-    fileNameEl.textContent = '';
+    archivoSeleccionado = null;
     await cargar();
   } catch (error) {
-    estado(error.message, 'error');
+    modalEstado.textContent = error.message;
+    modalEstado.className = 'modal-estado error';
+    confirmarBtn.disabled = false;
+    confirmarBtn.textContent = 'Importar';
   } finally {
-    boton.disabled = false;
+    cancelarBtn.disabled = false;
   }
 });
 
