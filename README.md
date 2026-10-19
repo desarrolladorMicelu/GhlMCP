@@ -29,6 +29,35 @@ Consulta cuánto recibe un cliente al entregar su equipo usado como parte de pag
 
 ---
 
+## API REST (`api.py`)
+
+Autenticación con header `X-API-Key: <API_REST_KEY>` o query `?key=<API_REST_KEY>`.
+
+| Endpoint | Descripción |
+|---|---|
+| `GET /stock?q=iphone 15` | Stock en bodegas (SQL Server OFIMA) |
+| `GET /retoma?q=iphone 15` | Precios de retoma (PostgreSQL) |
+| `GET /promociones?q=iphone` | Promociones cargadas |
+| `POST /promociones/importar` | Reemplaza las promociones desde CSV/XLSX (multipart `file`) |
+| `GET /promociones/plantilla` | Descarga `Plantilla.csv` |
+| `GET /promociones/ui` | Interfaz web para importar y listar |
+
+### Promociones
+
+El archivo debe tener el encabezado exacto:
+
+```csv
+SKU ;NOMBRE ;VALOR ANTES ;VALOR DESCUENTO
+```
+
+Al importar se borran todas las promociones anteriores y se insertan las nuevas en
+una sola transacción. Se aceptan `.csv` (separador `;` o `,`) y `.xlsx`. Los valores
+se interpretan como pesos: `1.234.567,89`, `$ 1,234,567.89` y `1234567` son válidos.
+
+La tabla `public.promociones` se crea automáticamente en la base `DATABASE_URL`.
+
+---
+
 ## Variables de entorno
 
 Copia `.env.example` a `.env` y completa los valores:
@@ -69,9 +98,14 @@ fastmcp run mcp_server.py
 
 ```
 mcpOfima/
-├── mcp_server.py      # Servidor MCP — herramientas consultar_stock y consultar_retoma
-├── db_sqlserver.py    # Helper de conexión a SQL Server (OFIMA)
-├── replicate.py       # Script de replicación OFIMA → PostgreSQL
+├── mcp_server.py        # Servidor MCP — consultar_stock y consultar_retoma
+├── api.py               # REST API — stock, retoma y promociones + interfaz web
+├── busqueda.py          # Búsqueda por tokens (palabras completas)
+├── promociones.py       # Carga CSV/XLSX y persistencia en PostgreSQL
+├── promociones_ui.html  # Interfaz web simple
+├── Plantilla.csv        # Plantilla de importación
+├── db_sqlserver.py      # Helper de conexión a SQL Server (OFIMA)
+├── replicate.py         # Script de replicación OFIMA → PostgreSQL
 ├── requirements.txt
 ├── Dockerfile
 ├── Procfile

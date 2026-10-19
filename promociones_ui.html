@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Promociones</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif; margin: 0; background: #f5f5f5; color: #222; }
+  .wrap { max-width: 960px; margin: 32px auto; padding: 0 16px; }
+  h1 { font-size: 22px; margin: 0 0 16px; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .btn {
+    background: #222; color: #fff; border: 1px solid #222;
+    padding: 9px 14px; border-radius: 6px; cursor: pointer;
+    font-size: 14px; line-height: 18px; text-decoration: none;
+    display: inline-block; box-sizing: border-box;
+  }
+  .btn.light { background: #fff; color: #222; border-color: #ccc; }
+  .btn:hover { opacity: .88; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  #file { display: none; }
+  .file-name { font-size: 13px; color: #555; }
+  #status { font-size: 13px; color: #555; }
+  #status.error { color: #b00020; }
+  #status.ok { color: #0a7a2f; }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid #e5e5e5; }
+  th { background: #fafafa; font-weight: 600; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  .muted { color: #777; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Promociones</h1>
+
+  <div class="bar">
+    <a class="btn light" href="/promociones/plantilla" download>Exportar plantilla</a>
+    <label class="btn light" for="file">Seleccionar archivo</label>
+    <input type="file" id="file" accept=".csv,.xlsx,.xlsm">
+    <button class="btn" id="importar">Importar</button>
+    <span class="file-name" id="file-name"></span>
+    <span id="status"></span>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>SKU</th>
+        <th>Nombre</th>
+        <th class="num">Valor antes</th>
+        <th class="num">Valor descuento</th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="4" class="muted">Cargando...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+const tbody = document.getElementById('tbody');
+const statusEl = document.getElementById('status');
+const fileEl = document.getElementById('file');
+const fileNameEl = document.getElementById('file-name');
+const boton = document.getElementById('importar');
+
+function formatear(numero) {
+  return new Intl.NumberFormat('es-CO', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(numero);
+}
+
+function escapar(texto) {
+  return String(texto).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function estado(mensaje, tipo) {
+  statusEl.textContent = mensaje || '';
+  statusEl.className = tipo || '';
+}
+
+function render(filas) {
+  if (!filas.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="muted">No hay promociones cargadas.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filas.map(function (fila) {
+    return '<tr>' +
+      '<td>' + escapar(fila.sku) + '</td>' +
+      '<td>' + escapar(fila.nombre) + '</td>' +
+      '<td class="num">' + formatear(fila.valor_antes) + '</td>' +
+      '<td class="num">' + formatear(fila.valor_descuento) + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+async function cargar() {
+  try {
+    const respuesta = await fetch('/promociones/ui/lista');
+    const datos = await respuesta.json();
+    if (!respuesta.ok) throw new Error(datos.detail || 'Error al cargar las promociones.');
+    render(datos.data || []);
+  } catch (error) {
+    tbody.innerHTML = '<tr><td colspan="4" class="muted">No se pudieron cargar las promociones.</td></tr>';
+    estado(error.message, 'error');
+  }
+}
+
+fileEl.addEventListener('change', function () {
+  fileNameEl.textContent = fileEl.files[0] ? fileEl.files[0].name : '';
+  estado('');
+});
+
+boton.addEventListener('click', async function () {
+  const archivo = fileEl.files[0];
+  if (!archivo) { estado('Selecciona un archivo.', 'error'); return; }
+  if (!confirm('Esto reemplaza todas las promociones actuales. ¿Continuar?')) return;
+
+  const cuerpo = new FormData();
+  cuerpo.append('file', archivo);
+
+  boton.disabled = true;
+  estado('Importando...');
+  try {
+    const respuesta = await fetch('/promociones/ui/importar', { method: 'POST', body: cuerpo });
+    const datos = await respuesta.json().catch(function () { return {}; });
+    if (!respuesta.ok) throw new Error(datos.detail || 'Error al importar el archivo.');
+    estado('Importados ' + datos.total + ' productos.', 'ok');
+    fileEl.value = '';
+    fileNameEl.textContent = '';
+    await cargar();
+  } catch (error) {
+    estado(error.message, 'error');
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+cargar();
+</script>
+</body>
+</html>

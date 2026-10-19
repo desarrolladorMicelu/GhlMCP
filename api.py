@@ -1,9 +1,13 @@
 """
 REST API — OFIMA Celulares
-Dos endpoints que exponen el inventario completo y el plan retoma completo.
+Expone inventario, plan retoma y promociones.
 
-GET /stock        → todo el stock en bodegas (SQL Server OFIMA)
-GET /retoma       → todos los precios de retoma (PostgreSQL Railway)
+GET  /stock                  → stock en bodegas (SQL Server OFIMA)
+GET  /retoma                 → precios de retoma (PostgreSQL Railway)
+GET  /promociones            → promociones cargadas (PostgreSQL Railway)
+POST /promociones/importar   → reemplaza las promociones desde CSV/XLSX
+GET  /promociones/plantilla  → descarga Plantilla.csv
+GET  /promociones/ui         → interfaz web simple para importar y listar
 
 Autenticación: header  X-API-Key: <API_REST_KEY>
                o query  ?key=<API_REST_KEY>
@@ -13,16 +17,19 @@ Arranque standalone:  uvicorn api:app --host 0.0.0.0 --port 8000
 
 import os
 import logging
+from pathlib import Path
 from typing import Optional
 
 import psycopg2
 import psycopg2.extras
-from fastapi import FastAPI, HTTPException, Security, Query
+from fastapi import FastAPI, HTTPException, Security, Query, File, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security.api_key import APIKeyHeader
 from dotenv import load_dotenv
 
 from db_sqlserver import get_sqlserver_conn, rows_to_dicts
 import busqueda
+import promociones
 
 load_dotenv()
 
@@ -149,8 +156,8 @@ STOCK_SQL = """
 
 app = FastAPI(
     title="OFIMA Celulares API",
-    description="Expone el inventario completo y los precios de retoma de Micelu.",
-    version="2.0.0",
+    description="Expone inventario, precios de retoma y promociones de Micelu.",
+    version="2.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -293,6 +300,124 @@ def get_retoma(
         "total": len(result),
         "data":  result,
     }
+
+
+# ── Promociones ───────────────────────────────────────────────────────────────
+
+def _html_promociones() -> str:
+    ruta = Path(__file__).with_name("promociones_ui.html")
+    if not ruta.exists():
+        raise HTTPException(status_code=500, detail="promociones_ui.html no encontrado.")
+    return ruta.read_text(encoding="utf-8")
+
+
+async def _importar_archivo(file: UploadFile) -> dict:
+    try:
+        contenido = await file.read()
+        productos = promociones.parsear(file.filename or "", contenido)
+        total = promociones.reemplazar(productos)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logging.error(f"[promociones/importar] {e}")
+        raise HTTPException(status_code=500, detail=f"Error importando promociones: {e}")
+
+    return {
+        "ok": True,
+        "total": total,
+        "data": [
+            {
+                "sku": p["sku"],
+                "nombre": p["nombre"],
+                "valor_antes": float(p["valor_antes"]),
+                "valor_descuento": float(p["valor_descuento"]),
+            }
+            for p in productos
+        ],
+    }
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+@app.get("/promociones/ui", response_class=HTMLResponse, include_in_schema=False)
+def interfaz_promociones():
+    return HTMLResponse(_html_promociones())
+
+
+@app.get("/promociones/plantilla", include_in_schema=False)
+def descargar_plantilla():
+    ruta = Path(__file__).with_name("Plantilla.csv")
+    if not ruta.exists():
+        raise HTTPException(status_code=404, detail="Plantilla.csv no encontrada.")
+    return FileResponse(ruta, media_type="text/csv", filename="Plantilla.csv")
+
+
+@app.get(
+    "/promociones",
+    tags=["Promociones"],
+    summary="Promociones cargadas",
+    description=(
+        "Devuelve las promociones guardadas (SKU, nombre, valor antes y valor descuento). "
+        "Búsqueda opcional con `q`: todos los términos deben aparecer como palabras "
+        "completas en el SKU o el nombre."
+    ),
+)
+def get_promociones(
+    q: Optional[str] = Query(
+        default=None,
+        description="Nombre, SKU o parte de ellos. Ej: 'iphone 15'.",
+    ),
+    key: str = Security(verify_api_key),
+):
+    try:
+        data = promociones.listar()
+    except Exception as e:
+        logging.error(f"[/promociones] {e}")
+        raise HTTPException(status_code=500, detail=f"Error consultando promociones: {e}")
+
+    data = busqueda.filtrar(data, q, lambda r: f'{r["sku"]} {r["nombre"]}')
+
+    return {
+        "query": q or None,
+        "total": len(data),
+        "data":  data,
+    }
+
+
+@app.post(
+    "/promociones/importar",
+    tags=["Promociones"],
+    summary="Reemplaza las promociones desde CSV/XLSX",
+    description=(
+        "Recibe un archivo con encabezado SKU ;NOMBRE ;VALOR ANTES ;VALOR DESCUENTO. "
+        "Borra todas las promociones actuales y guarda las del archivo en una sola "
+        "transacción."
+    ),
+)
+async def importar_promociones(
+    file: UploadFile = File(
+        ...,
+        description="Archivo CSV o XLSX con columnas SKU;NOMBRE;VALOR ANTES;VALOR DESCUENTO.",
+    ),
+    key: str = Security(verify_api_key),
+):
+    return await _importar_archivo(file)
+
+
+@app.get("/promociones/ui/lista", include_in_schema=False)
+def ui_lista_promociones():
+    try:
+        data = promociones.listar()
+    except Exception as e:
+        logging.error(f"[/promociones/ui/lista] {e}")
+        raise HTTPException(status_code=500, detail=f"Error consultando promociones: {e}")
+    return {"total": len(data), "data": data}
+
+
+@app.post("/promociones/ui/importar", include_in_schema=False)
+async def ui_importar_promociones(file: UploadFile = File(...)):
+    return await _importar_archivo(file)
 
 
 # ── Entrypoint standalone ─────────────────────────────────────────────────────
