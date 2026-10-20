@@ -42,11 +42,15 @@ Autenticación con header `X-API-Key: <API_REST_KEY>` o query `?key=<API_REST_KE
 | `GET /promociones/plantilla` | Descarga `Plantilla.csv` |
 | `GET /promociones/ui` | Interfaz web para importar y listar |
 
-`/stock` cruza el inventario con las promociones cargadas sin tocar la base de OFIMA:
-cada variante incluye `en_promo` y `promociones`. Las promociones que no tienen stock
-salen en `promociones_sin_stock` cuando se busca con `q`. El cruce es por SKU
-(normalizado) contra el código OFIMA, luego por nombre exacto y por nombre específico
-contenido en la descripción.
+`/stock` cruza el inventario con las promociones cargadas sin tocar la base de OFIMA.
+Por defecto omite las variantes con `stock = 0` (usa `incluir_sin_stock=true` para
+incluirlas). Cada variante trae `precio` como precio final a ofrecer; cuando hay
+promoción, `precio_es_promocional` es `true`, `precio_antes` trae el valor anterior y
+`promo_mensaje` la frase lista para el cliente. También se devuelven
+`promociones_vigentes` y `resumen_promociones`. Las promociones sin unidades salen en
+`promociones_sin_stock` cuando se busca con `q`. El cruce es por SKU (normalizado)
+contra el código OFIMA, luego por nombre exacto y por nombre específico contenido en
+la descripción.
 
 ### Promociones
 

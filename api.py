@@ -221,9 +221,12 @@ app = FastAPI(
         "- `q=iphone pro max` -> solo los Pro Max\n"
         "- `q=iphone` -> toda la familia iPhone\n"
         "Sin `q` devuelve todo el stock.\n\n"
-        "Cada variante incluye `en_promo` y `promociones` cuando el equipo tiene una "
-        "promoción cargada. Las promociones que no tienen stock se devuelven en "
-        "`promociones_sin_stock`."
+        "Por defecto solo devuelve variantes con stock mayor a 0; usa "
+        "`incluir_sin_stock=true` para incluir las agotadas.\n\n"
+        "Cada variante incluye `precio` como precio final a ofrecer. Si "
+        "`precio_es_promocional` es true, `precio_antes` trae el precio anterior "
+        "y `promo_mensaje` la frase lista para el cliente. Las promociones que no "
+        "tienen stock se devuelven en `promociones_sin_stock`."
     ),
 )
 def get_stock(
@@ -234,6 +237,10 @@ def get_stock(
     incluir_promociones: bool = Query(
         default=True,
         description="Cruza el stock con las promociones cargadas.",
+    ),
+    incluir_sin_stock: bool = Query(
+        default=False,
+        description="Incluye variantes con stock 0. Por defecto se omiten.",
     ),
     key: str = Security(verify_api_key),
 ):
@@ -267,6 +274,9 @@ def get_stock(
             "precio":        float(row["precio"]) if row["precio"] is not None else 0,
         })
 
+    if not incluir_sin_stock:
+        result = [row for row in result if (row["stock"] or 0) > 0]
+
     promos: list[dict] = []
     if incluir_promociones:
         try:
@@ -288,9 +298,15 @@ def get_stock(
         coincidencias = cache.get(row["codigo"], [])
         row["en_promo"] = bool(coincidencias)
         row["promociones"] = coincidencias
+        row["precio_antes"] = None
+        row["precio_es_promocional"] = False
         row["promo_mensaje"] = None
+
         if coincidencias:
             promo = coincidencias[0]
+            row["precio"] = float(promo["valor_descuento"])
+            row["precio_antes"] = float(promo["valor_antes"])
+            row["precio_es_promocional"] = True
             row["promo_mensaje"] = (
                 f'Está en promo: antes {_formato_cop(promo["valor_antes"])} '
                 f'y ahora {_formato_cop(promo["valor_descuento"])}.'
@@ -311,7 +327,7 @@ def get_stock(
     for row in result:
         if not row.get("en_promo"):
             continue
-        if row.get("estado") not in ("NU", "A") or (row.get("stock") or 0) <= 0:
+        if (row.get("stock") or 0) <= 0:
             continue
         for promo in row["promociones"]:
             clave = (row["codigo"], promo["sku"])
@@ -321,6 +337,8 @@ def get_stock(
             promociones_vigentes.append({
                 "codigo": row["codigo"],
                 "descripcion": row["descripcion"],
+                "estado": row["estado"],
+                "estado_nombre": row["estado_nombre"],
                 "sku": promo["sku"],
                 "nombre": promo["nombre"],
                 "valor_antes": promo["valor_antes"],
