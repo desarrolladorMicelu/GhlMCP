@@ -152,6 +152,14 @@ STOCK_SQL = """
         RTRIM(MtMercia.[DESCRIPCIO]), RTRIM(MvPrecio.[CODPRECIO])
 """
 
+def _formato_cop(valor) -> str:
+    """Formatea 2350000 como $2.350.000 (sin redondear centavos reales)."""
+    texto = f"{float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    if texto.endswith(",00"):
+        texto = texto[:-3]
+    return "$" + texto
+
+
 def _promos_para(codigo: str, descripcion: str, promos: list[dict]) -> list[dict]:
     """
     Busca promociones para un producto de stock.
@@ -280,6 +288,13 @@ def get_stock(
         coincidencias = cache.get(row["codigo"], [])
         row["en_promo"] = bool(coincidencias)
         row["promociones"] = coincidencias
+        row["promo_mensaje"] = None
+        if coincidencias:
+            promo = coincidencias[0]
+            row["promo_mensaje"] = (
+                f'Está en promo: antes {_formato_cop(promo["valor_antes"])} '
+                f'y ahora {_formato_cop(promo["valor_descuento"])}.'
+            )
 
     promos_sin_stock: list[dict] = []
     if q and promos:
@@ -291,11 +306,31 @@ def get_stock(
                 continue
             promos_sin_stock.append({**promo, "en_stock": False})
 
-    promos_en_resultado = {
-        promo["sku"]
-        for row in result
-        for promo in row["promociones"]
-    }
+    promociones_vigentes: list[dict] = []
+    vistos: set[tuple[str, str]] = set()
+    for row in result:
+        if not row.get("en_promo"):
+            continue
+        if row.get("estado") not in ("NU", "A") or (row.get("stock") or 0) <= 0:
+            continue
+        for promo in row["promociones"]:
+            clave = (row["codigo"], promo["sku"])
+            if clave in vistos:
+                continue
+            vistos.add(clave)
+            promociones_vigentes.append({
+                "codigo": row["codigo"],
+                "descripcion": row["descripcion"],
+                "sku": promo["sku"],
+                "nombre": promo["nombre"],
+                "valor_antes": promo["valor_antes"],
+                "valor_descuento": promo["valor_descuento"],
+                "mensaje": (
+                    f'{promo["nombre"]} está en promo: antes '
+                    f'{_formato_cop(promo["valor_antes"])} y ahora '
+                    f'{_formato_cop(promo["valor_descuento"])}.'
+                ),
+            })
 
     disponible = bool(result)
     respuesta = {
@@ -303,8 +338,10 @@ def get_stock(
         "disponible":            disponible,
         "total_variantes":       len(result),
         "total_unidades":        sum(row["stock"] for row in result),
-        "total_promociones":     len(promos_en_resultado) + len(promos_sin_stock),
+        "total_promociones":     len(promociones_vigentes) + len(promos_sin_stock),
         "data":                  result,
+        "promociones_vigentes":  promociones_vigentes,
+        "resumen_promociones":   " ".join(p["mensaje"] for p in promociones_vigentes) or None,
         "promociones_sin_stock": promos_sin_stock,
     }
     if not disponible and promos_sin_stock:
