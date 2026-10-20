@@ -12,6 +12,7 @@ import csv
 import io
 import os
 import re
+import time
 import unicodedata
 from decimal import Decimal, InvalidOperation
 
@@ -20,6 +21,10 @@ import psycopg2.extras
 
 TABLA = "public.promociones"
 COLUMNAS = ("SKU", "NOMBRE", "VALOR ANTES", "VALOR DESCUENTO")
+
+_CACHE_TTL = 60.0
+_cache: list[dict] | None = None
+_cache_ts = 0.0
 
 _CREATE = f"""
 CREATE TABLE IF NOT EXISTS {TABLA} (
@@ -183,8 +188,19 @@ def parsear(nombre_archivo: str, contenido: bytes) -> list[dict]:
 
 # ── Persistencia ──────────────────────────────────────────────────────────────
 
-def listar() -> list[dict]:
-    """Devuelve todas las promociones guardadas, en el orden de carga."""
+def listar(usar_cache: bool = False) -> list[dict]:
+    """
+    Devuelve todas las promociones guardadas, en el orden de carga.
+
+    `usar_cache=True` reutiliza el resultado hasta 60 s (para el cruce con /stock).
+    La caché se invalida al importar.
+    """
+    global _cache, _cache_ts
+
+    ahora = time.monotonic()
+    if usar_cache and _cache is not None and (ahora - _cache_ts) < _CACHE_TTL:
+        return [dict(promo) for promo in _cache]
+
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -198,7 +214,7 @@ def listar() -> list[dict]:
     finally:
         conn.close()
 
-    return [
+    data = [
         {
             "sku": fila["sku"],
             "nombre": fila["nombre"],
@@ -207,10 +223,15 @@ def listar() -> list[dict]:
         }
         for fila in filas
     ]
+    _cache = data
+    _cache_ts = ahora
+    return [dict(promo) for promo in data]
 
 
 def reemplazar(productos: list[dict]) -> int:
     """Borra todas las promociones e inserta las nuevas en una sola transacción."""
+    global _cache, _cache_ts
+
     if not productos:
         raise ValueError("No hay productos para guardar.")
 
@@ -231,4 +252,6 @@ def reemplazar(productos: list[dict]) -> int:
     finally:
         conn.close()
 
+    _cache = None
+    _cache_ts = 0.0
     return len(productos)

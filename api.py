@@ -152,6 +152,40 @@ STOCK_SQL = """
         RTRIM(MtMercia.[DESCRIPCIO]), RTRIM(MvPrecio.[CODPRECIO])
 """
 
+def _promos_para(codigo: str, descripcion: str, promos: list[dict]) -> list[dict]:
+    """
+    Busca promociones para un producto de stock.
+
+    Prioridad:
+      1. SKU igual al código OFIMA (normalizado).
+      2. Nombre igual a la descripción OFIMA (normalizado).
+      3. Nombre específico (3+ palabras) contenido en la descripción.
+    """
+    codigo_n = busqueda.normalizar(codigo)
+    descripcion_n = busqueda.normalizar(descripcion)
+    descripcion_tokens = set(busqueda.tokenizar(descripcion))
+
+    candidatas = []
+    for promo in promos:
+        sku_n = busqueda.normalizar(promo["sku"])
+        nombre_n = busqueda.normalizar(promo["nombre"])
+        nombre_tokens = set(busqueda.tokenizar(promo["nombre"]))
+
+        if sku_n and codigo_n and sku_n == codigo_n:
+            prioridad = 0
+        elif nombre_n and descripcion_n and nombre_n == descripcion_n:
+            prioridad = 1
+        elif len(nombre_tokens) >= 3 and nombre_tokens.issubset(descripcion_tokens):
+            prioridad = 2
+        else:
+            continue
+
+        candidatas.append((prioridad, -len(nombre_tokens), promo))
+
+    candidatas.sort(key=lambda item: (item[0], item[1]))
+    return [promo for _, _, promo in candidatas]
+
+
 # ── App ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
@@ -178,13 +212,20 @@ app = FastAPI(
         "- `q=iphone 16` -> solo la familia 16\n"
         "- `q=iphone pro max` -> solo los Pro Max\n"
         "- `q=iphone` -> toda la familia iPhone\n"
-        "Sin `q` devuelve todo el stock."
+        "Sin `q` devuelve todo el stock.\n\n"
+        "Cada variante incluye `en_promo` y `promociones` cuando el equipo tiene una "
+        "promoción cargada. Las promociones que no tienen stock se devuelven en "
+        "`promociones_sin_stock`."
     ),
 )
 def get_stock(
     q: Optional[str] = Query(
         default=None,
         description="Nombre o parte del nombre del equipo. Ej: 'iphone 15', 'iphone pro max'.",
+    ),
+    incluir_promociones: bool = Query(
+        default=True,
+        description="Cruza el stock con las promociones cargadas.",
     ),
     key: str = Security(verify_api_key),
 ):
@@ -218,13 +259,64 @@ def get_stock(
             "precio":        float(row["precio"]) if row["precio"] is not None else 0,
         })
 
+    promos: list[dict] = []
+    if incluir_promociones:
+        try:
+            promos = promociones.listar(usar_cache=True)
+        except Exception as e:
+            logging.warning(f"[/stock] No se pudieron cargar promociones: {e}")
+
+    cache: dict[str, list[dict]] = {}
+    promos_match: set[str] = set()
+    for row in result:
+        codigo = row["codigo"]
+        if codigo not in cache:
+            cache[codigo] = _promos_para(codigo, row["descripcion"], promos)
+        promos_match.update(promo["sku"] for promo in cache[codigo])
+
     result = busqueda.filtrar(result, q, lambda r: r["descripcion"])
 
-    return {
-        "query":           q or None,
-        "total_variantes": len(result),
-        "data":            result,
+    for row in result:
+        coincidencias = cache.get(row["codigo"], [])
+        row["en_promo"] = bool(coincidencias)
+        row["promociones"] = coincidencias
+
+    promos_sin_stock: list[dict] = []
+    if q and promos:
+        terminos = busqueda.tokenizar(q)
+        for promo in promos:
+            if not terminos or promo["sku"] in promos_match:
+                continue
+            if not busqueda.coincide(f'{promo["sku"]} {promo["nombre"]}', terminos):
+                continue
+            promos_sin_stock.append({**promo, "en_stock": False})
+
+    promos_en_resultado = {
+        promo["sku"]
+        for row in result
+        for promo in row["promociones"]
     }
+
+    disponible = bool(result)
+    respuesta = {
+        "query":                 q or None,
+        "disponible":            disponible,
+        "total_variantes":       len(result),
+        "total_unidades":        sum(row["stock"] for row in result),
+        "total_promociones":     len(promos_en_resultado) + len(promos_sin_stock),
+        "data":                  result,
+        "promociones_sin_stock": promos_sin_stock,
+    }
+    if not disponible and promos_sin_stock:
+        respuesta["mensaje"] = (
+            f"No hay stock en bodegas para '{q}', pero hay promociones registradas."
+        )
+    elif not disponible and q:
+        respuesta["mensaje"] = (
+            f"No hay stock ni promociones para '{q}'. Verifica el nombre del equipo."
+        )
+
+    return respuesta
 
 
 # ── GET /retoma ───────────────────────────────────────────────────────────────
