@@ -17,6 +17,7 @@ import psycopg2.extras
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from db_sqlserver import get_sqlserver_conn, rows_to_dicts
+import busqueda
 
 load_dotenv()
 
@@ -67,6 +68,7 @@ STOCK_QUERY = """
 
 ESTADOS = {
     "NU": "Nuevo",
+    "AA": "Nuevo",
     "A":  "Grado A",
     "B":  "Grado B",
     "C":  "Grado C",
@@ -81,6 +83,7 @@ COLORES = {
     "VE":  "Verde",
     "DO":  "Dorado",
     "LI":  "Lila/Morado",
+    "MO":  "Morado",
     "AM":  "Amarillo",
     "RO":  "Rojo",
     "GR":  "Gris",
@@ -97,6 +100,7 @@ CLASIFICACION_NOMBRES = {
     "B1": "Usado Grado B1",
     "C":  "Usado Grado C",
     "NU": "Nuevo",
+    "AA": "Nuevo",
 }
 
 
@@ -135,6 +139,13 @@ def _run_stock_query(q: str, solo_con_precio: bool) -> list[dict]:
     finally:
         cur.close()
         conn.close()
+
+    terminos = busqueda.tokenizar(q)
+    if terminos:
+        raw = [
+            row for row in raw
+            if busqueda.coincide(row.get("descripcion") or "", terminos)
+        ]
 
     result = []
     for row in raw:
@@ -211,8 +222,10 @@ def consultar_stock(q: str, solo_con_precio: bool = False) -> str:
     if not q:
         return json.dumps({"error": "El parámetro 'q' no puede estar vacío."}, ensure_ascii=False)
 
+    q_busqueda = busqueda.limpiar_consulta(q) or q
+
     try:
-        rows = _run_stock_query(q, solo_con_precio=solo_con_precio)
+        rows = _run_stock_query(q_busqueda, solo_con_precio=solo_con_precio)
     except Exception as e:
         logging.error(f"[consultar_stock] Error: {e}")
         return json.dumps({"error": f"Error consultando stock: {e}"}, ensure_ascii=False)
@@ -264,6 +277,8 @@ def consultar_retoma(q: str) -> str:
     if not q:
         return json.dumps({"error": "El parámetro 'q' no puede estar vacío."}, ensure_ascii=False)
 
+    q_busqueda = busqueda.limpiar_consulta(q) or q
+
     try:
         conn = _get_precios_conn()
     except RuntimeError as e:
@@ -287,7 +302,7 @@ def consultar_retoma(q: str) -> str:
               AND UPPER("NOMBRE_LARGO") LIKE UPPER(%s)
             ORDER BY TRIM("ANO_SALIDA") DESC, "NOMBRE_LARGO", "CLASIFICACION_SEMI"
             """,
-            (f"%{q}%",),
+            (f"%{q_busqueda}%",),
         )
         rows = [dict(r) for r in cur.fetchall()]
     except Exception as e:
@@ -296,6 +311,13 @@ def consultar_retoma(q: str) -> str:
     finally:
         cur.close()
         conn.close()
+
+    terminos = busqueda.tokenizar(q_busqueda)
+    if terminos:
+        rows = [
+            row for row in rows
+            if busqueda.coincide(f'{row["nombre"]} {row.get("marca") or ""}', terminos)
+        ]
 
     if not rows:
         return json.dumps({

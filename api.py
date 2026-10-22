@@ -75,6 +75,7 @@ BODEGAS_STOCK = ("BM", "TM", "TB", "BB", "BCAL", "BNQS")
 
 ESTADOS = {
     "NU": "Nuevo",
+    "AA": "Nuevo",
     "A":  "Grado A",
     "B":  "Grado B",
     "C":  "Grado C",
@@ -89,6 +90,7 @@ COLORES = {
     "VE":  "Verde",
     "DO":  "Dorado",
     "LI":  "Lila/Morado",
+    "MO":  "Morado",
     "AM":  "Amarillo",
     "RO":  "Rojo",
     "GR":  "Gris",
@@ -105,6 +107,7 @@ CLASIFICACION_NOMBRES = {
     "B1": "Usado Grado B1",
     "C":  "Usado Grado C",
     "NU": "Nuevo",
+    "AA": "Nuevo",
 }
 
 # ── SQL stock (todos los registros, sin filtro de nombre) ─────────────────────
@@ -220,6 +223,8 @@ app = FastAPI(
         "- `q=iphone 16` -> solo la familia 16\n"
         "- `q=iphone pro max` -> solo los Pro Max\n"
         "- `q=iphone` -> toda la familia iPhone\n"
+        "La unidad de capacidad (GB/TB) se ignora: `q=iphone 14 pro max 256 gb` "
+        "busca `iphone 14 pro max 256`.\n"
         "Sin `q` devuelve todo el stock.\n\n"
         "Por defecto solo devuelve variantes con stock mayor a 0; usa "
         "`incluir_sin_stock=true` para incluir las agotadas.\n\n"
@@ -292,7 +297,8 @@ def get_stock(
             cache[codigo] = _promos_para(codigo, row["descripcion"], promos)
         promos_match.update(promo["sku"] for promo in cache[codigo])
 
-    result = busqueda.filtrar(result, q, lambda r: r["descripcion"])
+    q_busqueda = busqueda.limpiar_consulta(q)
+    result = busqueda.filtrar(result, q_busqueda, lambda r: r["descripcion"])
 
     for row in result:
         coincidencias = cache.get(row["codigo"], [])
@@ -314,7 +320,7 @@ def get_stock(
 
     promos_sin_stock: list[dict] = []
     if q and promos:
-        terminos = busqueda.tokenizar(q)
+        terminos = busqueda.tokenizar(q_busqueda)
         for promo in promos:
             if not terminos or promo["sku"] in promos_match:
                 continue
@@ -390,6 +396,8 @@ def get_stock(
         "- `q=iphone 15` -> iPhone 15, 15 Plus, 15 Pro y 15 Pro Max (no el 14 ni el 16)\n"
         "- `q=iphone pro max` -> solo los Pro Max\n"
         "- `q=iphone` -> toda la familia iPhone\n"
+        "La unidad de capacidad (GB/TB) se ignora: `q=iphone 14 pro max 256 gb` "
+        "busca `iphone 14 pro max 256`.\n"
         "Sin `q` devuelve todos los precios de retoma."
     ),
 )
@@ -440,7 +448,8 @@ def get_retoma(
             "precio_recibe":          row["precio_recibe"],
         })
 
-    result = busqueda.filtrar(result, q, lambda r: f'{r["nombre"]} {r["marca"] or ""}')
+    q_busqueda = busqueda.limpiar_consulta(q)
+    result = busqueda.filtrar(result, q_busqueda, lambda r: f'{r["nombre"]} {r["marca"] or ""}')
 
     return {
         "query": q or None,

@@ -52,6 +52,14 @@ promoción, `precio_es_promocional` es `true`, `precio_antes` trae el valor ante
 contra el código OFIMA, luego por nombre exacto y por nombre específico contenido en
 la descripción.
 
+La búsqueda de `/stock` y `/retoma` ignora la unidad de capacidad y la condición:
+`q=iphone 14 pro max 256 gb` se busca como `iphone 14 pro max 256`, y
+`q=iphone 17 seminuevo` como `iphone 17`. Si el modelo envía solo el nombre, devuelve
+todas las capacidades y la IA filtra la que pidió el cliente.
+
+La búsqueda respeta las variantes: `q=iphone 17 pro` no devuelve el 17 Pro Max;
+`q=iphone 17` sí devuelve toda la familia 17.
+
 ### Promociones
 
 El archivo debe tener el encabezado exacto:
