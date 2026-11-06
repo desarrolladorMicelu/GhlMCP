@@ -41,6 +41,9 @@ Autenticación con header `X-API-Key: <API_REST_KEY>` o query `?key=<API_REST_KE
 | `POST /promociones/importar` | Reemplaza las promociones desde CSV/XLSX (multipart `file`) |
 | `GET /promociones/plantilla` | Descarga `Plantilla.csv` |
 | `GET /promociones/ui` | Interfaz web para importar y listar |
+| `GET /gangazos?q=iphone 13 pro max` | Gangazos cargados |
+| `POST /gangazos/importar` | Reemplaza los gangazos desde CSV/XLSX (multipart `file`) |
+| `GET /gangazos/plantilla` | Descarga `Plantilla_gangazos.csv` |
 
 `/stock` cruza el inventario con las promociones cargadas sin tocar la base de OFIMA.
 Por defecto omite las variantes con `stock = 0` (usa `incluir_sin_stock=true` para
@@ -51,6 +54,11 @@ promoción, `precio_es_promocional` es `true`, `precio_antes` trae el valor ante
 `promociones_sin_stock` cuando se busca con `q`. El cruce es por SKU (normalizado)
 contra el código OFIMA, luego por nombre exacto y por nombre específico contenido en
 la descripción.
+
+`/stock` también agrega los gangazos que coinciden con `q` a `data`, con
+`es_gangazo=true`, `nota` (el defecto), `bateria`, `serie`, `precio` (precio actual),
+`precio_antes`, `descuento` y `gangazo_mensaje`. Además devuelve `total_gangazos`,
+`gangazos_vigentes` y `resumen_gangazos`.
 
 La búsqueda de `/stock` y `/retoma` ignora la unidad de capacidad y la condición:
 `q=iphone 14 pro max 256 gb` se busca como `iphone 14 pro max 256`, y
@@ -73,6 +81,25 @@ una sola transacción. Se aceptan `.csv` (separador `;` o `,`) y `.xlsx`. Los va
 se interpretan como pesos: `1.234.567,89`, `$ 1,234,567.89` y `1234567` son válidos.
 
 La tabla `public.promociones` se crea automáticamente en la base `DATABASE_URL`.
+La interfaz incluye un botón **Borrar todo** que vacía la tabla sin importar un archivo.
+
+### Gangazos
+
+El archivo debe tener el encabezado:
+
+```csv
+Referencia.1 ;ESTAD ;NOMBRE ;Serie ;NOTA ;Baterí ;BODEG ;PRECIO ANTES ;PRECIO AHOR ;DESCUENTO
+```
+
+Al importar se borran todos los gangazos anteriores y se insertan los nuevos en una
+sola transacción. Se aceptan `.csv` y `.xlsx`. La `Serie` es única; si se repite en el
+archivo, queda la última fila. La tabla `public.gangazos` se crea automáticamente.
+
+Cada gangazo aparece en `/stock` cuando su referencia/color coincide con `q`. El
+registro se marca con `es_gangazo: true`, `estado: "G"` y `estado_nombre: "Gangazo"`
+(el `estado_original` del archivo queda en `estado_original`). La IA debe explicar
+siempre el defecto de `nota`. La interfaz incluye un botón **Borrar todo** que vacía
+la tabla de gangazos.
 
 ---
 
@@ -117,11 +144,13 @@ fastmcp run mcp_server.py
 ```
 mcpOfima/
 ├── mcp_server.py        # Servidor MCP — consultar_stock y consultar_retoma
-├── api.py               # REST API — stock, retoma y promociones + interfaz web
+├── api.py               # REST API — stock, retoma, promociones y gangazos + UI
 ├── busqueda.py          # Búsqueda por tokens (palabras completas)
 ├── promociones.py       # Carga CSV/XLSX y persistencia en PostgreSQL
-├── promociones_ui.html  # Interfaz web simple
-├── Plantilla.csv        # Plantilla de importación
+├── gangazos.py          # Carga CSV/XLSX de gangazos y persistencia
+├── promociones_ui.html  # Interfaz web simple (promociones y gangazos)
+├── Plantilla.csv        # Plantilla de promociones
+├── Plantilla_gangazos.csv # Plantilla de gangazos
 ├── db_sqlserver.py      # Helper de conexión a SQL Server (OFIMA)
 ├── replicate.py         # Script de replicación OFIMA → PostgreSQL
 ├── requirements.txt

@@ -29,6 +29,7 @@ from dotenv import load_dotenv
 
 from db_sqlserver import get_sqlserver_conn, rows_to_dicts
 import busqueda
+import gangazos
 import promociones
 
 load_dotenv()
@@ -231,7 +232,9 @@ app = FastAPI(
         "Cada variante incluye `precio` como precio final a ofrecer. Si "
         "`precio_es_promocional` es true, `precio_antes` trae el precio anterior "
         "y `promo_mensaje` la frase lista para el cliente. Las promociones que no "
-        "tienen stock se devuelven en `promociones_sin_stock`."
+        "tienen stock se devuelven en `promociones_sin_stock`.\n\n"
+        "Los gangazos se agregan a `data` con `es_gangazo=true`, `nota` (el "
+        "defecto), `precio_antes`, `precio` y `gangazo_mensaje`."
     ),
 )
 def get_stock(
@@ -242,6 +245,10 @@ def get_stock(
     incluir_promociones: bool = Query(
         default=True,
         description="Cruza el stock con las promociones cargadas.",
+    ),
+    incluir_gangazos: bool = Query(
+        default=True,
+        description="Agrega los gangazos cargados al resultado.",
     ),
     incluir_sin_stock: bool = Query(
         default=False,
@@ -318,6 +325,67 @@ def get_stock(
                 f'y ahora {_formato_cop(promo["valor_descuento"])}.'
             )
 
+    lista_gangazos: list[dict] = []
+    if incluir_gangazos:
+        try:
+            lista_gangazos = gangazos.listar(usar_cache=True)
+        except Exception as e:
+            logging.warning(f"[/stock] No se pudieron cargar gangazos: {e}")
+
+    gangazos_match = busqueda.filtrar(
+        lista_gangazos,
+        q_busqueda,
+        lambda g: f'{g["referencia"]} {g["nombre"]}',
+    )
+
+    gangazos_vigentes: list[dict] = []
+    for g in gangazos_match:
+        nota = (g.get("nota") or "").strip()
+        detalle = (
+            f'Tiene un detalle: {nota}.'
+            if nota
+            else "Tiene un detalle físico o funcional."
+        )
+        mensaje = (
+            f'{detalle} Está en {_formato_cop(g["precio_ahora"])} '
+            f'(antes {_formato_cop(g["precio_antes"])}).'
+        )
+        result.append({
+            "codigo":                 f'G-{g["serie"]}',
+            "descripcion":            f'{g["referencia"]} {g["nombre"]}'.strip(),
+            "estado":                 "G",
+            "estado_nombre":          "Gangazo",
+            "estado_original":        g["estado"],
+            "color":                  "",
+            "color_nombre":           g["nombre"],
+            "stock":                  1,
+            "bodegas":                [g["bodega"]] if g["bodega"] else [],
+            "precio":                 float(g["precio_ahora"]),
+            "precio_antes":           float(g["precio_antes"]),
+            "precio_es_promocional":  False,
+            "en_promo":               False,
+            "promociones":            [],
+            "promo_mensaje":          None,
+            "es_gangazo":             True,
+            "serie":                  g["serie"],
+            "nota":                   g["nota"],
+            "bateria":                g["bateria"],
+            "descuento":              float(g["descuento"]) if g["descuento"] is not None else None,
+            "gangazo_mensaje":        mensaje,
+        })
+        gangazos_vigentes.append({
+            "referencia":   g["referencia"],
+            "nombre":       g["nombre"],
+            "serie":        g["serie"],
+            "nota":         g["nota"],
+            "bateria":      g["bateria"],
+            "bodega":       g["bodega"],
+            "precio_antes": float(g["precio_antes"]),
+            "precio_ahora": float(g["precio_ahora"]),
+            "descuento":    float(g["descuento"]) if g["descuento"] is not None else None,
+            "mensaje":      mensaje,
+        })
+
     promos_sin_stock: list[dict] = []
     if q and promos:
         terminos = busqueda.tokenizar(q_busqueda)
@@ -363,10 +431,13 @@ def get_stock(
         "total_variantes":       len(result),
         "total_unidades":        sum(row["stock"] for row in result),
         "total_promociones":     len(promociones_vigentes) + len(promos_sin_stock),
+        "total_gangazos":        len(gangazos_vigentes),
         "data":                  result,
         "promociones_vigentes":  promociones_vigentes,
         "resumen_promociones":   " ".join(p["mensaje"] for p in promociones_vigentes) or None,
         "promociones_sin_stock": promos_sin_stock,
+        "gangazos_vigentes":     gangazos_vigentes,
+        "resumen_gangazos":      " ".join(g["mensaje"] for g in gangazos_vigentes) or None,
     }
     if not disponible and promos_sin_stock:
         respuesta["mensaje"] = (
@@ -456,6 +527,135 @@ def get_retoma(
         "total": len(result),
         "data":  result,
     }
+
+
+# ── Gangazos ──────────────────────────────────────────────────────────────────
+
+async def _importar_gangazos(file: UploadFile) -> dict:
+    try:
+        contenido = await file.read()
+        items = gangazos.parsear(file.filename or "", contenido)
+        total = gangazos.reemplazar(items)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logging.error(f"[gangazos/importar] {e}")
+        raise HTTPException(status_code=500, detail=f"Error importando gangazos: {e}")
+
+    return {
+        "ok": True,
+        "total": total,
+        "data": [
+            {
+                "referencia":   g["referencia"],
+                "estado":       g["estado"],
+                "nombre":       g["nombre"],
+                "serie":        g["serie"],
+                "nota":         g["nota"],
+                "bateria":      g["bateria"],
+                "bodega":       g["bodega"],
+                "precio_antes": float(g["precio_antes"]),
+                "precio_ahora": float(g["precio_ahora"]),
+                "descuento":    float(g["descuento"]) if g["descuento"] is not None else None,
+            }
+            for g in items
+        ],
+    }
+
+
+@app.get("/gangazos/plantilla", include_in_schema=False)
+def descargar_plantilla_gangazos():
+    ruta = Path(__file__).with_name("Plantilla_gangazos.csv")
+    if not ruta.exists():
+        raise HTTPException(status_code=404, detail="Plantilla_gangazos.csv no encontrada.")
+    return FileResponse(ruta, media_type="text/csv", filename="Plantilla_gangazos.csv")
+
+
+@app.get(
+    "/gangazos",
+    tags=["Gangazos"],
+    summary="Gangazos cargados",
+    description=(
+        "Devuelve los equipos con defecto cargados desde Excel/CSV. Incluye "
+        "referencia, estado, color, serie, nota del defecto, batería, bodega, "
+        "precio antes, precio ahora y descuento."
+    ),
+)
+def get_gangazos(
+    q: Optional[str] = Query(
+        default=None,
+        description="Referencia, color, nota o serie. Ej: 'iphone 13 pro max'.",
+    ),
+    key: str = Security(verify_api_key),
+):
+    try:
+        data = gangazos.listar()
+    except Exception as e:
+        logging.error(f"[/gangazos] {e}")
+        raise HTTPException(status_code=500, detail=f"Error consultando gangazos: {e}")
+
+    q_busqueda = busqueda.limpiar_consulta(q)
+    data = busqueda.filtrar(
+        data,
+        q_busqueda,
+        lambda g: (
+            f'{g["referencia"]} {g["nombre"] or ""} '
+            f'{g["nota"] or ""} {g["serie"] or ""}'
+        ),
+    )
+
+    return {
+        "query": q or None,
+        "total": len(data),
+        "data":  data,
+    }
+
+
+@app.post(
+    "/gangazos/importar",
+    tags=["Gangazos"],
+    summary="Reemplaza los gangazos desde CSV/XLSX",
+    description=(
+        "Recibe un archivo con las columnas Referencia.1, ESTAD, NOMBRE, Serie, "
+        "NOTA, Baterí, BODEG, PRECIO ANTES, PRECIO AHOR y DESCUENTO. Borra los "
+        "gangazos actuales y guarda los del archivo en una sola transacción."
+    ),
+)
+async def importar_gangazos(
+    file: UploadFile = File(
+        ...,
+        description="Archivo CSV o XLSX con las columnas de gangazos.",
+    ),
+    key: str = Security(verify_api_key),
+):
+    return await _importar_gangazos(file)
+
+
+@app.get("/gangazos/ui/lista", include_in_schema=False)
+def ui_lista_gangazos():
+    try:
+        data = gangazos.listar()
+    except Exception as e:
+        logging.error(f"[/gangazos/ui/lista] {e}")
+        raise HTTPException(status_code=500, detail=f"Error consultando gangazos: {e}")
+    return {"total": len(data), "data": data}
+
+
+@app.post("/gangazos/ui/importar", include_in_schema=False)
+async def ui_importar_gangazos(file: UploadFile = File(...)):
+    return await _importar_gangazos(file)
+
+
+@app.post("/gangazos/ui/borrar", include_in_schema=False)
+def ui_borrar_gangazos():
+    try:
+        borrados = gangazos.borrar()
+    except Exception as e:
+        logging.error(f"[/gangazos/ui/borrar] {e}")
+        raise HTTPException(status_code=500, detail=f"Error borrando gangazos: {e}")
+    return {"ok": True, "borrados": borrados}
 
 
 # ── Promociones ───────────────────────────────────────────────────────────────
@@ -574,6 +774,16 @@ def ui_lista_promociones():
 @app.post("/promociones/ui/importar", include_in_schema=False)
 async def ui_importar_promociones(file: UploadFile = File(...)):
     return await _importar_archivo(file)
+
+
+@app.post("/promociones/ui/borrar", include_in_schema=False)
+def ui_borrar_promociones():
+    try:
+        borrados = promociones.borrar()
+    except Exception as e:
+        logging.error(f"[/promociones/ui/borrar] {e}")
+        raise HTTPException(status_code=500, detail=f"Error borrando promociones: {e}")
+    return {"ok": True, "borrados": borrados}
 
 
 # ── Entrypoint standalone ─────────────────────────────────────────────────────

@@ -144,6 +144,7 @@ Los campos internos nunca se muestran al cliente. Tradúcelos siempre:
 - **CODIGO** → modelo y capacidad del equipo
 - **ESTADO** → traduce siempre así, nunca muestres la letra sola:
   - NU = **Nuevo**
+  - AA = **Nuevo**
   - A = **Seminuevo** (excelente estado, batería entre 85% y 100%)
   - B = **Usado** (buen estado)
   - C = **Usado con detalles** (tiene detalles físicos o funcionales identificados)
@@ -172,6 +173,24 @@ Reglas:
 - Si `total_promociones` es `0`, no hay promoción: no la inventes.
 - Si el equipo está en `promociones_sin_stock`, aclara que hay promoción pero no hay stock disponible.
 - No consultes otra tabla para promociones: vienen en la misma consulta de Stock OFIMA.
+
+---
+
+**GANGAZOS EN Stock OFIMA**
+
+Algunos registros traen `es_gangazo: true`, `nota`, `bateria`, `serie`,
+`precio_antes`, `precio` y `gangazo_mensaje`. Son equipos con un detalle físico
+o funcional y por eso están más baratos.
+
+Reglas:
+- Sí puedes ofrecerlos, aunque su estado original sea B.
+- SIEMPRE di el detalle de `nota` antes o junto al precio; nunca lo ocultes.
+- Usa `precio` como precio actual y `precio_antes` como precio anterior.
+- Puedes usar `gangazo_mensaje` tal cual: ya trae el detalle y los precios.
+- Si `nota` está vacía, di que tiene un detalle físico o funcional; no inventes.
+- No los presentes como nuevos ni seminuevos.
+- Si el cliente pide nuevo o seminuevo, muestra primero esas opciones y ofrece
+  el gangazo como alternativa más barata con detalle.
 
 ---
 

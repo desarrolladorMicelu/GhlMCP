@@ -3,13 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Promociones</title>
+<title>Promociones y gangazos</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif; margin: 0; background: #f5f5f5; color: #222; }
-  .wrap { max-width: 960px; margin: 32px auto; padding: 0 16px; }
-  h1 { font-size: 22px; margin: 0 0 16px; }
-  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .wrap { max-width: 1100px; margin: 32px auto; padding: 0 16px; }
+  h1 { font-size: 22px; margin: 0 0 20px; }
+  h2 { font-size: 18px; margin: 0 0 10px; }
+  .seccion { margin-bottom: 36px; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
   .btn {
     background: #222; color: #fff; border: 1px solid #222;
     padding: 9px 14px; border-radius: 6px; cursor: pointer;
@@ -17,16 +19,19 @@
     display: inline-block;
   }
   .btn.light { background: #fff; color: #222; border-color: #ccc; }
+  .btn.danger { background: #fff; color: #b00020; border-color: #e0b4bb; }
   .btn:hover { opacity: .88; }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
-  #status { font-size: 13px; color: #555; }
-  #status.error { color: #b00020; }
-  #status.ok { color: #0a7a2f; }
+  .status { font-size: 13px; color: #555; }
+  .status.error { color: #b00020; }
+  .status.ok { color: #0a7a2f; }
 
+  .tabla-scroll { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; background: #fff; font-size: 14px; }
-  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid #e5e5e5; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid #e5e5e5; white-space: nowrap; }
   th { background: #fafafa; font-weight: 600; }
-  td.num, th.num { text-align: right; white-space: nowrap; }
+  td.num, th.num { text-align: right; }
+  td.nota { white-space: normal; min-width: 220px; }
   .muted { color: #777; }
 
   #file { display: none; }
@@ -36,7 +41,7 @@
     padding: 16px;
   }
   .overlay.open { display: flex; }
-  .modal { background: #fff; width: 100%; max-width: 460px; border-radius: 10px; padding: 20px; }
+  .modal { background: #fff; width: 100%; max-width: 480px; border-radius: 10px; padding: 20px; }
   .modal h2 { font-size: 18px; margin: 0 0 6px; }
   .modal p { font-size: 13px; color: #666; margin: 0 0 16px; }
   .drop {
@@ -55,33 +60,69 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Promociones</h1>
+  <h1>Promociones y gangazos</h1>
 
-  <div class="bar">
-    <a class="btn light" href="/promociones/plantilla" download>Exportar plantilla</a>
-    <button class="btn" id="abrir">Importar promociones</button>
-    <span id="status"></span>
-  </div>
+  <section class="seccion">
+    <h2>Promociones</h2>
+    <div class="bar">
+      <a class="btn light" href="/promociones/plantilla" download>Exportar plantilla</a>
+      <button class="btn" id="abrir-promos">Importar promociones</button>
+      <button class="btn danger" id="borrar-promos">Borrar todo</button>
+      <span class="status" id="status-promos"></span>
+    </div>
+    <div class="tabla-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th>Nombre</th>
+            <th class="num">Valor antes</th>
+            <th class="num">Valor descuento</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-promos">
+          <tr><td colspan="4" class="muted">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 
-  <table>
-    <thead>
-      <tr>
-        <th>SKU</th>
-        <th>Nombre</th>
-        <th class="num">Valor antes</th>
-        <th class="num">Valor descuento</th>
-      </tr>
-    </thead>
-    <tbody id="tbody">
-      <tr><td colspan="4" class="muted">Cargando...</td></tr>
-    </tbody>
-  </table>
+  <section class="seccion">
+    <h2>Gangazos</h2>
+    <div class="bar">
+      <a class="btn light" href="/gangazos/plantilla" download>Exportar plantilla</a>
+      <button class="btn" id="abrir-gangazos">Importar gangazos</button>
+      <button class="btn danger" id="borrar-gangazos">Borrar todo</button>
+      <span class="status" id="status-gangazos"></span>
+    </div>
+    <div class="tabla-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Referencia</th>
+            <th>Estado</th>
+            <th>Color</th>
+            <th>Serie</th>
+            <th>Nota</th>
+            <th>Batería</th>
+            <th>Bodega</th>
+            <th class="num">Precio antes</th>
+            <th class="num">Precio ahora</th>
+            <th class="num">Descuento</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-gangazos">
+          <tr><td colspan="10" class="muted">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 </div>
 
 <div class="overlay" id="overlay">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
-    <h2 id="modal-titulo">Importar promociones</h2>
-    <p>Selecciona o arrastra el archivo CSV o XLSX. Al importar se reemplazan todas las promociones actuales.</p>
+    <h2 id="modal-titulo">Importar</h2>
+    <p id="modal-descripcion"></p>
 
     <input type="file" id="file" accept=".csv,.xlsx,.xlsm">
     <label class="drop" id="drop" for="file">
@@ -99,21 +140,82 @@
   </div>
 </div>
 
+<div class="overlay" id="overlay-borrar">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="borrar-titulo">
+    <h2 id="borrar-titulo">Borrar todo</h2>
+    <p id="borrar-texto"></p>
+    <div class="modal-acciones">
+      <button class="btn light" id="cancelar-borrar">Cancelar</button>
+      <button class="btn danger" id="confirmar-borrar">Borrar todo</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const tbody = document.getElementById('tbody');
-const statusEl = document.getElementById('status');
+const tbodyPromos = document.getElementById('tbody-promos');
+const tbodyGangazos = document.getElementById('tbody-gangazos');
+const statusPromos = document.getElementById('status-promos');
+const statusGangazos = document.getElementById('status-gangazos');
 const overlay = document.getElementById('overlay');
 const fileEl = document.getElementById('file');
 const dropEl = document.getElementById('drop');
 const archivoEl = document.getElementById('archivo');
 const modalEstado = document.getElementById('modal-estado');
-const abrirBtn = document.getElementById('abrir');
+const modalTitulo = document.getElementById('modal-titulo');
+const modalDescripcion = document.getElementById('modal-descripcion');
 const cancelarBtn = document.getElementById('cancelar');
 const confirmarBtn = document.getElementById('confirmar');
+const overlayBorrar = document.getElementById('overlay-borrar');
+const borrarTitulo = document.getElementById('borrar-titulo');
+const borrarTexto = document.getElementById('borrar-texto');
+const cancelarBorrar = document.getElementById('cancelar-borrar');
+const confirmarBorrar = document.getElementById('confirmar-borrar');
 
 let archivoSeleccionado = null;
+let modoActual = null;
+
+const MODOS = {
+  promociones: {
+    titulo: 'Importar promociones',
+    descripcion: 'Selecciona o arrastra el archivo CSV o XLSX. Al importar se reemplazan todas las promociones actuales.',
+    endpoint: '/promociones/ui/importar',
+    status: statusPromos,
+    cargar: cargarPromos,
+    nombre: 'promociones'
+  },
+  gangazos: {
+    titulo: 'Importar gangazos',
+    descripcion: 'Selecciona o arrastra el archivo CSV o XLSX. Al importar se reemplazan todos los gangazos actuales.',
+    endpoint: '/gangazos/ui/importar',
+    status: statusGangazos,
+    cargar: cargarGangazos,
+    nombre: 'gangazos'
+  }
+};
+
+const BORRAR = {
+  promociones: {
+    titulo: 'Borrar promociones',
+    texto: 'Se eliminarán todas las promociones cargadas. La tabla quedará vacía hasta que importes otro archivo.',
+    endpoint: '/promociones/ui/borrar',
+    status: statusPromos,
+    cargar: cargarPromos,
+    nombre: 'promociones'
+  },
+  gangazos: {
+    titulo: 'Borrar gangazos',
+    texto: 'Se eliminarán todos los gangazos cargados. La tabla quedará vacía hasta que importes otro archivo.',
+    endpoint: '/gangazos/ui/borrar',
+    status: statusGangazos,
+    cargar: cargarGangazos,
+    nombre: 'gangazos'
+  }
+};
+
+let modoBorrar = null;
 
 function formatear(numero) {
+  if (numero === null || numero === undefined) return '';
   return new Intl.NumberFormat('es-CO', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2
@@ -121,22 +223,22 @@ function formatear(numero) {
 }
 
 function escapar(texto) {
-  return String(texto).replace(/[&<>"']/g, function (c) {
+  return String(texto == null ? '' : texto).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
 }
 
-function estado(mensaje, tipo) {
-  statusEl.textContent = mensaje || '';
-  statusEl.className = tipo || '';
+function estado(elemento, mensaje, tipo) {
+  elemento.textContent = mensaje || '';
+  elemento.className = 'status' + (tipo ? ' ' + tipo : '');
 }
 
-function render(filas) {
+function renderPromos(filas) {
   if (!filas.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="muted">No hay promociones cargadas.</td></tr>';
+    tbodyPromos.innerHTML = '<tr><td colspan="4" class="muted">No hay promociones cargadas.</td></tr>';
     return;
   }
-  tbody.innerHTML = filas.map(function (fila) {
+  tbodyPromos.innerHTML = filas.map(function (fila) {
     return '<tr>' +
       '<td>' + escapar(fila.sku) + '</td>' +
       '<td>' + escapar(fila.nombre) + '</td>' +
@@ -146,19 +248,56 @@ function render(filas) {
   }).join('');
 }
 
-async function cargar() {
+function renderGangazos(filas) {
+  if (!filas.length) {
+    tbodyGangazos.innerHTML = '<tr><td colspan="10" class="muted">No hay gangazos cargados.</td></tr>';
+    return;
+  }
+  tbodyGangazos.innerHTML = filas.map(function (fila) {
+    return '<tr>' +
+      '<td>' + escapar(fila.referencia) + '</td>' +
+      '<td>' + escapar(fila.estado) + '</td>' +
+      '<td>' + escapar(fila.nombre) + '</td>' +
+      '<td>' + escapar(fila.serie) + '</td>' +
+      '<td class="nota">' + escapar(fila.nota) + '</td>' +
+      '<td>' + escapar(fila.bateria) + '</td>' +
+      '<td>' + escapar(fila.bodega) + '</td>' +
+      '<td class="num">' + formatear(fila.precio_antes) + '</td>' +
+      '<td class="num">' + formatear(fila.precio_ahora) + '</td>' +
+      '<td class="num">' + formatear(fila.descuento) + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+async function cargarPromos() {
   try {
     const respuesta = await fetch('/promociones/ui/lista');
     const datos = await respuesta.json();
     if (!respuesta.ok) throw new Error(datos.detail || 'Error al cargar las promociones.');
-    render(datos.data || []);
+    renderPromos(datos.data || []);
   } catch (error) {
-    tbody.innerHTML = '<tr><td colspan="4" class="muted">No se pudieron cargar las promociones.</td></tr>';
-    estado(error.message, 'error');
+    tbodyPromos.innerHTML = '<tr><td colspan="4" class="muted">No se pudieron cargar las promociones.</td></tr>';
+    estado(statusPromos, error.message, 'error');
   }
 }
 
-function abrirModal() {
+async function cargarGangazos() {
+  try {
+    const respuesta = await fetch('/gangazos/ui/lista');
+    const datos = await respuesta.json();
+    if (!respuesta.ok) throw new Error(datos.detail || 'Error al cargar los gangazos.');
+    renderGangazos(datos.data || []);
+  } catch (error) {
+    tbodyGangazos.innerHTML = '<tr><td colspan="10" class="muted">No se pudieron cargar los gangazos.</td></tr>';
+    estado(statusGangazos, error.message, 'error');
+  }
+}
+
+function abrirModal(modo) {
+  modoActual = modo;
+  const config = MODOS[modo];
+  modalTitulo.textContent = config.titulo;
+  modalDescripcion.textContent = config.descripcion;
   archivoSeleccionado = null;
   fileEl.value = '';
   archivoEl.textContent = '';
@@ -183,13 +322,68 @@ function usarArchivo(archivo) {
   confirmarBtn.disabled = false;
 }
 
-abrirBtn.addEventListener('click', abrirModal);
+document.getElementById('abrir-promos').addEventListener('click', function () { abrirModal('promociones'); });
+document.getElementById('abrir-gangazos').addEventListener('click', function () { abrirModal('gangazos'); });
 cancelarBtn.addEventListener('click', cerrarModal);
 overlay.addEventListener('click', function (evento) {
   if (evento.target === overlay) cerrarModal();
 });
 document.addEventListener('keydown', function (evento) {
   if (evento.key === 'Escape' && overlay.classList.contains('open')) cerrarModal();
+});
+
+function abrirBorrar(modo) {
+  modoBorrar = modo;
+  const config = BORRAR[modo];
+  borrarTitulo.textContent = config.titulo;
+  borrarTexto.textContent = config.texto;
+  confirmarBorrar.disabled = false;
+  cancelarBorrar.disabled = false;
+  confirmarBorrar.textContent = 'Borrar todo';
+  overlayBorrar.classList.add('open');
+}
+
+function cerrarBorrar() {
+  overlayBorrar.classList.remove('open');
+}
+
+document.getElementById('borrar-promos').addEventListener('click', function () { abrirBorrar('promociones'); });
+document.getElementById('borrar-gangazos').addEventListener('click', function () { abrirBorrar('gangazos'); });
+cancelarBorrar.addEventListener('click', cerrarBorrar);
+overlayBorrar.addEventListener('click', function (evento) {
+  if (evento.target === overlayBorrar) cerrarBorrar();
+});
+document.addEventListener('keydown', function (evento) {
+  if (evento.key === 'Escape' && overlayBorrar.classList.contains('open')) cerrarBorrar();
+});
+
+confirmarBorrar.addEventListener('click', async function () {
+  if (!modoBorrar) return;
+  const config = BORRAR[modoBorrar];
+
+  confirmarBorrar.disabled = true;
+  cancelarBorrar.disabled = true;
+  confirmarBorrar.textContent = 'Borrando...';
+
+  try {
+    const respuesta = await fetch(config.endpoint, { method: 'POST' });
+    const datos = await respuesta.json().catch(function () { return {}; });
+    if (!respuesta.ok) throw new Error(datos.detail || 'Error al borrar.');
+
+    cerrarBorrar();
+    if (datos.borrados) {
+      estado(config.status, 'Borrados ' + datos.borrados + ' ' + config.nombre + '.', 'ok');
+    } else {
+      estado(config.status, 'No había ' + config.nombre + ' para borrar.', 'ok');
+    }
+    await config.cargar();
+  } catch (error) {
+    borrarTexto.textContent = error.message;
+    confirmarBorrar.disabled = false;
+  } finally {
+    cancelarBorrar.disabled = false;
+    confirmarBorrar.textContent = 'Borrar todo';
+  }
 });
 
 fileEl.addEventListener('change', function () {
@@ -213,12 +407,13 @@ dropEl.addEventListener('drop', function (e) {
 });
 
 confirmarBtn.addEventListener('click', async function () {
-  if (!archivoSeleccionado) {
+  if (!archivoSeleccionado || !modoActual) {
     modalEstado.textContent = 'Selecciona un archivo.';
     modalEstado.className = 'modal-estado error';
     return;
   }
 
+  const config = MODOS[modoActual];
   confirmarBtn.disabled = true;
   cancelarBtn.disabled = true;
   confirmarBtn.textContent = 'Importando...';
@@ -229,14 +424,14 @@ confirmarBtn.addEventListener('click', async function () {
   cuerpo.append('file', archivoSeleccionado);
 
   try {
-    const respuesta = await fetch('/promociones/ui/importar', { method: 'POST', body: cuerpo });
+    const respuesta = await fetch(config.endpoint, { method: 'POST', body: cuerpo });
     const datos = await respuesta.json().catch(function () { return {}; });
     if (!respuesta.ok) throw new Error(datos.detail || 'Error al importar el archivo.');
 
     cerrarModal();
-    estado('Importados ' + datos.total + ' productos.', 'ok');
+    estado(config.status, 'Importados ' + datos.total + ' ' + config.nombre + '.', 'ok');
     archivoSeleccionado = null;
-    await cargar();
+    await config.cargar();
   } catch (error) {
     modalEstado.textContent = error.message;
     modalEstado.className = 'modal-estado error';
@@ -247,7 +442,8 @@ confirmarBtn.addEventListener('click', async function () {
   }
 });
 
-cargar();
+cargarPromos();
+cargarGangazos();
 </script>
 </body>
 </html>

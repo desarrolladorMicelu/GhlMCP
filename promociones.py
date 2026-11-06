@@ -255,3 +255,22 @@ def reemplazar(productos: list[dict]) -> int:
     _cache = None
     _cache_ts = 0.0
     return len(productos)
+
+
+def borrar() -> int:
+    """Borra todas las promociones y deja la tabla vacía."""
+    global _cache, _cache_ts
+
+    conn = get_conn()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(_CREATE)
+                cur.execute(f"DELETE FROM {TABLA}")
+                borrados = cur.rowcount
+    finally:
+        conn.close()
+
+    _cache = None
+    _cache_ts = 0.0
+    return borrados
