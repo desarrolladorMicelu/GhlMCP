@@ -341,11 +341,16 @@ def get_stock(
     gangazos_vigentes: list[dict] = []
     for g in gangazos_match:
         nota = (g.get("nota") or "").strip()
-        detalle = (
-            f'Tiene un detalle: {nota}.'
-            if nota
-            else "Tiene un detalle físico o funcional."
-        )
+        resumen = (g.get("nota_resumen") or "").strip()
+        if resumen:
+            detalle = f'Tiene un detalle: {resumen}'
+        elif nota:
+            detalle = f'Tiene un detalle: {nota}'
+        else:
+            detalle = "Tiene un detalle físico o funcional."
+        if not detalle.endswith("."):
+            detalle += "."
+
         mensaje = (
             f'{detalle} Está en {_formato_cop(g["precio_ahora"])} '
             f'(antes {_formato_cop(g["precio_antes"])}).'
@@ -369,6 +374,12 @@ def get_stock(
             "es_gangazo":             True,
             "serie":                  g["serie"],
             "nota":                   g["nota"],
+            "nota_codigos":           g.get("nota_codigos", []),
+            "nota_titulos":           g.get("nota_titulos", []),
+            "nota_resumen":           g.get("nota_resumen"),
+            "nota_cliente":           g.get("nota_cliente"),
+            "nota_detalles":          g.get("nota_detalles", []),
+            "nota_match":             g.get("nota_match"),
             "bateria":                g["bateria"],
             "descuento":              float(g["descuento"]) if g["descuento"] is not None else None,
             "gangazo_mensaje":        mensaje,
@@ -378,6 +389,9 @@ def get_stock(
             "nombre":       g["nombre"],
             "serie":        g["serie"],
             "nota":         g["nota"],
+            "nota_resumen": g.get("nota_resumen"),
+            "nota_codigos": g.get("nota_codigos", []),
+            "nota_match":   g.get("nota_match"),
             "bateria":      g["bateria"],
             "bodega":       g["bodega"],
             "precio_antes": float(g["precio_antes"]),

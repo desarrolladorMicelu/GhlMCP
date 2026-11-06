@@ -101,6 +101,13 @@ registro se marca con `es_gangazo: true`, `estado: "G"` y `estado_nombre: "Ganga
 siempre el defecto de `nota`. La interfaz incluye un botón **Borrar todo** que vacía
 la tabla de gangazos.
 
+Las notas se traducen con `notas_gangazos.py`: catálogo de códigos (CC, DG, VR, PF...),
+alias, resumen corto y texto comercial. El endpoint agrega `nota_codigos`,
+`nota_titulos`, `nota_resumen`, `nota_cliente`, `nota_detalles` y `nota_match`. La
+búsqueda usa alias exactos, frases contenidas, prefijos de códigos combinados y
+coincidencia aproximada. Si no hay coincidencia, `nota_match` es `sin_match` y
+`nota_resumen` repite la nota literal: nunca se inventa un significado.
+
 ---
 
 ## Variables de entorno
@@ -148,6 +155,7 @@ mcpOfima/
 ├── busqueda.py          # Búsqueda por tokens (palabras completas)
 ├── promociones.py       # Carga CSV/XLSX y persistencia en PostgreSQL
 ├── gangazos.py          # Carga CSV/XLSX de gangazos y persistencia
+├── notas_gangazos.py    # Catálogo y traducción de las notas de gangazos
 ├── promociones_ui.html  # Interfaz web simple (promociones y gangazos)
 ├── Plantilla.csv        # Plantilla de promociones
 ├── Plantilla_gangazos.csv # Plantilla de gangazos

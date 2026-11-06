@@ -259,7 +259,14 @@ function renderGangazos(filas) {
       '<td>' + escapar(fila.estado) + '</td>' +
       '<td>' + escapar(fila.nombre) + '</td>' +
       '<td>' + escapar(fila.serie) + '</td>' +
-      '<td class="nota">' + escapar(fila.nota) + '</td>' +
+      '<td class="nota">' + escapar(fila.nota) +
+        (fila.nota_resumen && fila.nota_resumen !== fila.nota
+          ? '<br><span class="muted">' + escapar(fila.nota_resumen) + '</span>'
+          : '') +
+        (fila.nota_match === 'sin_match'
+          ? '<br><span class="muted">Sin glosario</span>'
+          : '') +
+      '</td>' +
       '<td>' + escapar(fila.bateria) + '</td>' +
       '<td>' + escapar(fila.bodega) + '</td>' +
       '<td class="num">' + formatear(fila.precio_antes) + '</td>' +

@@ -15,6 +15,7 @@ import time
 import psycopg2
 import psycopg2.extras
 
+from notas_gangazos import analizar_nota
 from promociones import (
     _decodificar,
     _filas_csv,
@@ -186,21 +187,27 @@ def listar(usar_cache: bool = False) -> list[dict]:
     finally:
         conn.close()
 
-    data = [
-        {
+    data = []
+    for fila in filas:
+        nota_info = analizar_nota(fila["nota"] or "")
+        data.append({
             "referencia": fila["referencia"],
             "estado": fila["estado"],
             "nombre": fila["nombre"],
             "serie": fila["serie"],
             "nota": fila["nota"],
+            "nota_codigos": nota_info["codigos"],
+            "nota_titulos": nota_info["titulos"],
+            "nota_resumen": nota_info["resumen"],
+            "nota_cliente": nota_info["cliente"],
+            "nota_detalles": nota_info["detalles"],
+            "nota_match": nota_info["match"],
             "bateria": fila["bateria"],
             "bodega": fila["bodega"],
             "precio_antes": float(fila["precio_antes"]),
             "precio_ahora": float(fila["precio_ahora"]),
             "descuento": float(fila["descuento"]) if fila["descuento"] is not None else None,
-        }
-        for fila in filas
-    ]
+        })
     _cache = data
     _cache_ts = ahora
     return [dict(g) for g in data]
