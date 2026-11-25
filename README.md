@@ -129,14 +129,20 @@ Herramientas:
 | `consultar_stock(q)` | `GET /stock?q=...` |
 | `consultar_retoma(q)` | `GET /retoma?q=...` |
 
-En GHL, conecta el MCP con:
+El MCP está expuesto en dos transportes:
+
+- Streamable HTTP: `https://<app>.up.railway.app/mcp/`
+- SSE: `https://<app>.up.railway.app/sse/`
+
+En GHL, si el conector pide SSE o si al conectar `/mcp/` aparece
+`Missing session ID`, usa:
 
 ```
-https://<app>.up.railway.app/mcp/
+https://<app>.up.railway.app/sse/
 ```
 
-Si GHL no acepta la barra final, prueba `https://<app>.up.railway.app/mcp`
-(FastMCP redirige internamente).
+Si GHL usa streamable HTTP, usa `/mcp/`. Abrir `/mcp/` en el navegador devuelve
+`Missing session ID`: eso es normal, porque falta el handshake MCP.
 
 No necesitas crear otro servicio ni definir `API_BASE_URL`. La misma
 `API_REST_KEY` que usa la REST API sirve para el MCP.

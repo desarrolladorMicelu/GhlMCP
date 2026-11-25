@@ -202,13 +202,15 @@ def _promos_para(codigo: str, descripcion: str, promos: list[dict]) -> list[dict
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
-mcp_asgi = mcp_instance.http_app(path="/")
+mcp_http_asgi = mcp_instance.http_app(path="/", transport="http")
+mcp_sse_asgi = mcp_instance.http_app(path="/", transport="sse")
 
 
 @asynccontextmanager
 async def lifespan(app):
-    async with mcp_asgi.lifespan(app):
-        yield
+    async with mcp_http_asgi.lifespan(app):
+        async with mcp_sse_asgi.lifespan(app):
+            yield
 
 
 app = FastAPI(
@@ -220,7 +222,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.mount("/mcp", mcp_asgi)
+app.mount("/mcp", mcp_http_asgi)
+app.mount("/sse", mcp_sse_asgi)
 
 
 # ── GET /stock ────────────────────────────────────────────────────────────────
