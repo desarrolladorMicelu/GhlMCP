@@ -131,18 +131,24 @@ Herramientas:
 
 El MCP está expuesto en dos transportes:
 
-- Streamable HTTP: `https://<app>.up.railway.app/mcp/`
+- Streamable HTTP **stateless** con respuestas JSON: `https://<app>.up.railway.app/mcp/`
 - SSE: `https://<app>.up.railway.app/sse/`
 
-En GHL, si el conector pide SSE o si al conectar `/mcp/` aparece
-`Missing session ID`, usa:
+El transporte `/mcp/` no exige session ID: acepta `initialize`, `tools/list` y
+`tools/call` por POST. Abrirlo con un GET en el navegador devuelve `405 Method
+Not Allowed`; eso es normal, porque el navegador no hace el handshake MCP.
+
+En GHL usa primero:
+
+```
+https://<app>.up.railway.app/mcp/
+```
+
+Si el conector solo soporta SSE, usa:
 
 ```
 https://<app>.up.railway.app/sse/
 ```
-
-Si GHL usa streamable HTTP, usa `/mcp/`. Abrir `/mcp/` en el navegador devuelve
-`Missing session ID`: eso es normal, porque falta el handshake MCP.
 
 No necesitas crear otro servicio ni definir `API_BASE_URL`. La misma
 `API_REST_KEY` que usa la REST API sirve para el MCP.

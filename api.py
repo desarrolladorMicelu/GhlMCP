@@ -202,7 +202,12 @@ def _promos_para(codigo: str, descripcion: str, promos: list[dict]) -> list[dict
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
-mcp_http_asgi = mcp_instance.http_app(path="/", transport="http")
+mcp_http_asgi = mcp_instance.http_app(
+    path="/",
+    transport="http",
+    stateless_http=True,
+    json_response=True,
+)
 mcp_sse_asgi = mcp_instance.http_app(path="/", transport="sse")
 
 
