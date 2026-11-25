@@ -110,6 +110,39 @@ coincidencia aproximada. Si no hay coincidencia, `nota_match` es `sin_match` y
 
 ---
 
+## MCP server (`mcp_server.py`)
+
+El MCP va montado dentro de la misma app FastAPI (`api.py`), así que se despliega
+una sola vez y se obtienen dos rutas en el mismo host:
+
+- REST: `https://<app>.up.railway.app/stock`
+- MCP: `https://<app>.up.railway.app/mcp`
+
+`consultar_stock` llama a `/stock` y `consultar_retoma` a `/retoma`, devolviendo
+el mismo JSON (con promociones y gangazos). Por defecto usa
+`http://127.0.0.1:$PORT`, por lo que no necesita una URL externa.
+
+Herramientas:
+
+| Herramienta | REST que usa |
+|---|---|
+| `consultar_stock(q)` | `GET /stock?q=...` |
+| `consultar_retoma(q)` | `GET /retoma?q=...` |
+
+En GHL, conecta el MCP con:
+
+```
+https://<app>.up.railway.app/mcp/
+```
+
+Si GHL no acepta la barra final, prueba `https://<app>.up.railway.app/mcp`
+(FastMCP redirige internamente).
+
+No necesitas crear otro servicio ni definir `API_BASE_URL`. La misma
+`API_REST_KEY` que usa la REST API sirve para el MCP.
+
+---
+
 ## Variables de entorno
 
 Copia `.env.example` a `.env` y completa los valores:

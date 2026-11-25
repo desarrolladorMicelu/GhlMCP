@@ -17,6 +17,7 @@ Arranque standalone:  uvicorn api:app --host 0.0.0.0 --port 8000
 
 import os
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -28,6 +29,7 @@ from fastapi.security.api_key import APIKeyHeader
 from dotenv import load_dotenv
 
 from db_sqlserver import get_sqlserver_conn, rows_to_dicts
+from mcp_server import mcp as mcp_instance
 import busqueda
 import gangazos
 import promociones
@@ -200,13 +202,25 @@ def _promos_para(codigo: str, descripcion: str, promos: list[dict]) -> list[dict
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
+mcp_asgi = mcp_instance.http_app(path="/")
+
+
+@asynccontextmanager
+async def lifespan(app):
+    async with mcp_asgi.lifespan(app):
+        yield
+
+
 app = FastAPI(
     title="OFIMA Celulares API",
-    description="Expone inventario, precios de retoma y promociones de Micelu.",
-    version="2.1.0",
+    description="Expone inventario, precios de retoma, promociones y MCP.",
+    version="2.2.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
+
+app.mount("/mcp", mcp_asgi)
 
 
 # ── GET /stock ────────────────────────────────────────────────────────────────
@@ -377,8 +391,6 @@ def get_stock(
             "nota_codigos":           g.get("nota_codigos", []),
             "nota_titulos":           g.get("nota_titulos", []),
             "nota_resumen":           g.get("nota_resumen"),
-            "nota_cliente":           g.get("nota_cliente"),
-            "nota_detalles":          g.get("nota_detalles", []),
             "nota_match":             g.get("nota_match"),
             "bateria":                g["bateria"],
             "descuento":              float(g["descuento"]) if g["descuento"] is not None else None,
